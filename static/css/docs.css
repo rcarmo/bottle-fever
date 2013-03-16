@@ -1,0 +1,9 @@
+h1, h2, h3 {
+    line-height: 2em;
+}
+
+pre {
+    padding: 1em;
+    background-color: #eee;
+    border: 1px solid #ccc;
+}
