@@ -37,6 +37,3 @@ if __name__ == "__main__":
         log.debug(f)
         feed = fc.add_feed(f['xmlUrl'], title = f['title'], site_url = f['htmlUrl'])
         uc.add_feed_to_group(user, feed, uc.get_group(f['group']))
-        
-    for f in fc.get_feeds():
-        controllers.fetch(f)
