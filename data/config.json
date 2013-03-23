@@ -1,6 +1,7 @@
 {
     "debug": true,
     "environment": "dev",
+    "db": "data/store.db",
     "http": {
         "bind_address": "0.0.0.0",
         "port": 8000

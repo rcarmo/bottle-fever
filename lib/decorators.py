@@ -134,3 +134,27 @@ def memoize(f):
             ret = self[key] = self.f(*key)
             return ret
     return memodict(f)
+    
+
+class cached_method(object):
+    """Memoization decorator for class members"""
+    def __init__(self, func):
+        self.func = func
+        
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self.func
+        return functools.partial(self, obj)
+        
+    def __call__(self, *args, **kwargs):
+        obj = args[0]
+        try:
+            cache = obj.__cache
+        except AttributeError:
+            cache = obj.__cache = {}
+        key = (self.func, args[1:], frozenset(kwargs.items()))
+        try:
+            res = cache[key]
+        except KeyError:
+            res = cache[key] = self.func(*args, **kwargs)
+        return res
