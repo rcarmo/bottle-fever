@@ -7,12 +7,15 @@ Created by: Rui Carmo
 License: MIT (see LICENSE for details)
 """
 
-import os, sys, logging, inspect, functools, json
+import os, sys, logging
+
+log = logging.getLogger()
+
+import inspect, functools, json, base64
 from bottle import app
 from decorators import memoize
 from collections import deque
 
-log = logging.getLogger()
 
 class Struct(dict):
     """An object that recursively builds itself from a dict and allows easy access to attributes"""
@@ -137,3 +140,8 @@ def safe_eval(buffer):
             log.error('Error %s while doing safe_eval of %s' % (e, buffer))
             return None
     return buffer
+    
+
+def data_uri(content_type, data):
+    """Return data as a data: URI scheme"""
+    return "data:%s;base64,%s" % (content_type, base64.urlsafe_b64encode(data))
