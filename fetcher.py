@@ -12,7 +12,7 @@ import os, sys, time, json, multiprocessing, logging, logging.config
 # Make sure our bundled libraries take precedence
 sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),'lib'))
 
-import config, utils, opml
+import config, utils
 
 # read configuration file
 config.settings = utils.get_config(os.path.join(utils.path_for('data'),'config.json'))

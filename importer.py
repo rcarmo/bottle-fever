@@ -12,7 +12,7 @@ import os, sys, json, time, logging, logging.config
 # Make sure our bundled libraries take precedence
 sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),'lib'))
 
-import config, utils, opml
+import config, utils, markup.opml
 
 # read configuration file
 config.settings = utils.get_config(os.path.join(utils.path_for('data'),'config.json'))
@@ -32,7 +32,7 @@ if __name__ == "__main__":
     uc = controllers.UserController()
     user = uc.get_user('default')
 
-    feeds = opml.parse_file(sys.argv[1])
+    feeds = markup.opml.parse_file(sys.argv[1])
     start = time.time()
     for f in feeds:
         feed = fc.add_feed(f['xmlUrl'], title = f['title'], site_url = f['htmlUrl'])

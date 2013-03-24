@@ -234,11 +234,10 @@ class FeedController:
                             tags   = get_entry_tags(entry),
                             when   = get_entry_timestamp(entry))
             db.close()
-        # TODO: store etag, last_modified, ttl, etc., cleanup duds, expand links, download linked content, the works.
+        # TODO: favicons, expand links, download linked content, the works.
         
 
 def feed_worker(feed):
     # Use a private controller for multiprocessing
     fc = FeedController()
-    #log.info("Worker processing %s" % feed.url)
     fc.fetch_feed(feed)
