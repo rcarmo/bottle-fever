@@ -37,7 +37,7 @@
         },
         "loggers": {
             "peewee": {
-                "level"   : "DEBUG",
+                "level"   : "ERROR",
                 "handlers": ["ram","console"]
             }
         },

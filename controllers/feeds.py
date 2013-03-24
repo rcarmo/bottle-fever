@@ -8,7 +8,7 @@ License: MIT (see LICENSE for details)
 """
 
 import os, sys, logging
-import time, socket, hashlib
+import time, socket, hashlib, urllib2
 
 log = logging.getLogger()
 
@@ -31,6 +31,12 @@ def get_entry_content(entry):
         if 'html' in c.type: 
             return c.value
     return candidates[0].value
+    
+    
+def get_entry_title(entry):
+    if 'title' in entry:
+        return entry.title
+    return "Untitled"
     
 
 def get_entry_id(entry):
@@ -107,17 +113,23 @@ class FeedController:
         headers   = res.get('headers', {})
         exception = res.get("bozo_exception", Exception()).__class__
 
+    
         if exception != Exception:
+            try:
+                msg = "%s@%d" % (res.get("bozo_exception", "Unhandled"), res.bozo_exception.getMessage(),res.bozo_exception.getLineNumber())
+            except:
+                msg = ""
+                pass
             # Map exceptions to warning messages
             message, leave = {
-                socket.timeout       : ("timed out", True),
-                socket.error         : (res.bozo_exception.args[1], True),
-                socket.gaierror      : (res.bozo_exception.args[1], True),
-                IOError              : (res.bozo_exception, True),
-                feedparser.zlib.error: ("broken compression", False),
-                urllib2.UrlError     : (res.bozo_exception.args[1], True),
-                AttributeError       : (res.bozo_exception, True)
-            }.get(exception,("%s:%d" % (res.bozo_exception.getMessage(),res.bozo_exception.getLineNumber()),True))
+                socket.timeout                       : ("timed out", True),
+                socket.error                         : (res.bozo_exception.args, True),
+                socket.gaierror                      : (res.bozo_exception.args, True),
+                IOError                              : (res.bozo_exception, True),
+                feedparser.zlib.error                : ("broken compression", False),
+                urllib2.URLError                     : (res.bozo_exception.args, True),
+                AttributeError                       : (res.bozo_exception, True)
+            }.get(exception,(msg,False))
             if message:
                 log.warn("Feed %s: %s" % (feed.url, message))
             if leave: 
@@ -138,20 +150,23 @@ class FeedController:
             return
         
         if 'content-type' in headers and 'xml' not in headers['content-type']:
-            log.warn("Feed %s has strange content-type %s, proceeding" % headers['content-type'])
+            log.warn("Feed %s has strange content-type %s, proceeding" % (feed.url, headers['content-type']))
         
         res.entries.reverse()
         for entry in res.entries:
-            print get_entry_id(entry)    
-            db.connect()
-            Item.create(guid   = get_entry_id(entry),
-                        feed   = feed,
-                        title  = entry.title,
-                        author = get_entry_author(entry,res.feed),
-                        html   = get_entry_content(entry),
-                        url    = entry.link,
-                        tags   = get_entry_tags(entry),
-                        when   = get_entry_timestamp(entry))
+            guid = get_entry_id(entry)
+            # TODO: handle updates
+            try:
+                Item.get(guid = guid)
+            except Item.DoesNotExist:
+                Item.create(guid   = guid,
+                            feed   = feed,
+                            title  = get_entry_title(entry),
+                            author = get_entry_author(entry,res.feed),
+                            html   = get_entry_content(entry),
+                            url    = entry.link,
+                            tags   = get_entry_tags(entry),
+                            when   = get_entry_timestamp(entry))
             db.close()
 
 

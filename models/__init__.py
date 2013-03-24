@@ -106,7 +106,6 @@ class Subscription(CustomModel):
 def setup(skip_if_existing = True):
     """Create tables for all models"""
     for item in inspect.getmembers(sys.modules[__name__], inspect.isclass):
-        print item
         # make sure we only handle classes defined locally, not imports
         if item[1].__module__ == __name__:
             item[1].create_table(skip_if_existing)
