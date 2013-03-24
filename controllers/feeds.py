@@ -37,7 +37,7 @@ def get_entry_content(entry):
             return c.value
     if candidates:
         return candidates[0].value
-    return None
+    return ''
     
     
 def get_entry_title(entry):
@@ -249,10 +249,13 @@ class FeedController:
             guid = get_entry_id(entry)
             url = expand(entry.link)
             content = get_entry_content(entry)
-            hrefs = get_link_references(content)
+            if len(content):
+                hrefs = get_link_references(content)
+            else:
+                hrefs = []
             hrefs.append(url)
-            # link expansion may have resulted in duplicates, so make them unique
-            hrefs = expand_links(feed, set(hrefs))
+
+            hrefs = set(expand_links(feed, set(hrefs)))
 
             # TODO: handle item updates
             
