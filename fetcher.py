@@ -36,5 +36,5 @@ if __name__ == "__main__":
     else:
         for f in feeds:
             controllers.feed_worker(f)
-    log.info("%d feeds fetchd in %fs" % (len(feeds), time.time() - start))
+    log.info("%d feeds handled in %fs" % (len(feeds), time.time() - start))
 
