@@ -28,9 +28,6 @@ models.setup()
 if __name__ == "__main__":
     log.info("Starting fetcher.")
         
-    feeds = opml.parse_file(sys.argv[1])
-    
-    c = controllers.FeedController()
-    c.add_feed(
-    for f in c.get_feeds():
-        controllers.fetch(f)
+    fc = controllers.FeedController()
+    p = multiprocessing.Pool(processes=4)
+    p.map(controllers.feed_worker, [f for f in fc.get_feeds()])

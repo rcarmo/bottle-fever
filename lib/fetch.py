@@ -52,7 +52,7 @@ def _open_source(source, etag=None, last_modified=None):
 
     if urlparse.urlparse(source)[0][:4] == 'http':
         request = urllib2.Request(source)
-        request.add_header('User-Agent', settings.fetcher.useragent)
+        request.add_header('User-Agent', settings.fetcher.user_agent)
         if etag:
             request.add_header('If-None-Match', etag)
         if last_modified:

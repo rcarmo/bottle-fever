@@ -14,9 +14,7 @@ log = logging.getLogger()
 import config
 from peewee import *
 
-db = SqliteDatabase(config.settings.db,threadlocals=True)
-db.connect()
-
+db = SqliteDatabase(config.settings.db,check_same_thread=False)
 
 class CustomModel(Model):
     """Binds the database to all our models"""
@@ -56,6 +54,8 @@ class Feed(CustomModel):
     ttl                  = IntegerField(default=3600) # seconds
     apply_filter         = ForeignKeyField(Filter,default=0)
     last_updated_on_time = IntegerField(default=0) # epoch
+    etag                 = CharField(null=True)
+    last_modified        = CharField(null=True) # http header
 
     class Meta:
         indexes = (
@@ -70,18 +70,19 @@ class Item(CustomModel):
     guid    = CharField()
     feed    = ForeignKeyField(Feed)
     title   = CharField()
-    author  = CharField()
-    html    = TextField()
+    author  = CharField(null=True)
+    html    = TextField(null=True)
     url     = CharField()
-    created_on_time = IntegerField() # epoch
+    tags    = CharField(null=True)
+    when    = IntegerField() # epoch
 
     class Meta:
         indexes = (
-            (('created_on_time',), False),
-            (('guid',), True),
-            (('url',), True),
+            (('when',), False),
+            (('guid',), False),
+            (('url',), False),
         )
-        order_by = ('-created_on_time',)
+        order_by = ('-when',)
 
 
 class Saved(CustomModel):
@@ -113,3 +114,5 @@ def setup(skip_if_existing = True):
         User.create(username='default',api_key='default')
     except:
         pass
+    db.close()
+
