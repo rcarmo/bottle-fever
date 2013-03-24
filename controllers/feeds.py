@@ -30,7 +30,9 @@ def get_entry_content(entry):
     for c in candidates:
         if 'html' in c.type: 
             return c.value
-    return candidates[0].value
+    if content:
+        return content[0].value
+    return None
     
     
 def get_entry_title(entry):
