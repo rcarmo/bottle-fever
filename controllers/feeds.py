@@ -8,7 +8,8 @@ License: MIT (see LICENSE for details)
 """
 
 import os, sys, logging
-import time, socket, hashlib, urllib2
+import time, datetime
+import socket, hashlib, urllib2
 
 log = logging.getLogger()
 
@@ -84,13 +85,20 @@ def get_entry_timestamp(entry):
         if when:
             return time.mktime(when)
     return time.time()
+    
+    
+def get_feed_updated(feed):
+    for header in ['updated', 'published']:
+        when = entry.get(header+'_parsed',None)
+        if when:
+            return time.mktime(when)
+    return time.time()
 
 
 class FeedController:
 
     def get_feeds(self):
         """Return all feeds"""
-        db.connect()
         result = [f for f in Feed.select()]
         db.close()
         return result
@@ -99,7 +107,6 @@ class FeedController:
     def add_feed(self, url, site_url = None, title = None, group = None):
         """Add a feed to the database"""
         # existing feed?
-        db.connect()
         try:
             f = Feed.get(Feed.url == url)
         except Feed.DoesNotExist:
@@ -110,7 +117,7 @@ class FeedController:
     
     def fetch_feed(self, feed):
         try:
-            res = feedparser.parse(feed.url, etag = feed.etag, modified = feed.last_modified)
+            res = feedparser.parse(feed.url, etag = feed.etag, modified = datetime.datetime.fromtimestamp(feed.last_modified))
         except Exception, e:
             log.error("Could not fetch %s: %s" % (feed.url, e))
             return
@@ -140,10 +147,12 @@ class FeedController:
             if leave: 
                 return
         
+        log.info("%d %s" % (status, feed.url))
         if status == 301:   # permanent redirect
             feed.url = res['url']
             feed.save()
         elif status == 304: # not modified
+            log.info("Feed %s is not modified." % feed.url)
             return
         elif status == 410: # gone
             log.info("Feed %s is gone, marking as disabled" % feed.url)
@@ -157,11 +166,24 @@ class FeedController:
         if 'content-type' in headers and 'xml' not in headers['content-type']:
             log.warn("Feed %s has strange content-type %s, proceeding" % (feed.url, headers['content-type']))
         
+        #log.debug(res.feed.ttl)
+        ttl = res.feed.get('ttl',None)
+        etag = res.feed.get('etag',None)
+        last_modified = res.feed.get('modified_parsed',None)
+        
+        if etag:
+            log.debug(etag)      
+        feed.ttl = ttl
+        feed.etag = etag
+        feed.last_modified = time.mktime(last_modified)
+        feed.last_status = status
+        feed.save()
+        db.close()
+        return
         res.entries.reverse()
         for entry in res.entries:
             guid = get_entry_id(entry)
             # TODO: handle updates
-            db.connect()
             try:
                 Item.get(guid = guid)
             except Item.DoesNotExist:
@@ -174,11 +196,11 @@ class FeedController:
                             tags   = get_entry_tags(entry),
                             when   = get_entry_timestamp(entry))
             db.close()
-        # TODO: store etag, last_modified, ttl, etc., cleanup duds, the works.
+        # TODO: store etag, last_modified, ttl, etc., cleanup duds, expand links, download linked content, the works.
         
 
 def feed_worker(feed):
     # Use a private controller for multiprocessing
     fc = FeedController()
-    log.info("Worker processing %s" % feed.url)
+    #log.info("Worker processing %s" % feed.url)
     fc.fetch_feed(feed)

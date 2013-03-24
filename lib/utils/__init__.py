@@ -1,21 +1,27 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-Utility classes and functions
 
-Created by: Rui Carmo
-License: MIT (see LICENSE for details)
+"""
+Copyright (c) 2012, Rui Carmo
+Description: Utility functions
+License: MIT (see LICENSE.md for details)
 """
 
-import os, sys, logging
+import os, sys, time, re, logging
+import json, xml.dom.minidom
+import subprocess, socket, urllib, urllib2, fcntl, struct
+from collections import deque
 
 log = logging.getLogger()
 
-import inspect, functools, json, base64
-from bottle import app
-from decorators import memoize
-from collections import deque
+# Characters used for generating page/URL aliases
+ALIASING_CHARS = ['','.','-','_']
 
+# Prefixes used to identify attachments (cid is MIME-inspired)
+ATTACHMENT_SCHEMAS = ['cid','attach']
+
+# regexp for matching caching headers
+MAX_AGE_REGEX = re.compile('max-age(\s*)=(\s*)(\d+)')
 
 class Struct(dict):
     """An object that recursively builds itself from a dict and allows easy access to attributes"""
@@ -39,7 +45,7 @@ class Struct(dict):
 
 
 class InMemoryHandler(logging.Handler):
-    """In memory logging handler with a circular buffer - 2013-02-28 10:52:02"""
+    """In memory logging handler with a circular buffer"""
 
     def __init__(self, limit=8192):
         # run the regular Handler __init__
@@ -72,48 +78,6 @@ def json_str(item):
         return item
 
 
-@memoize
-def shorten(url):
-    """Minimalist URL shortener using SAPO services"""
-    u = '?'.join(('http://services.sapo.pt/PunyURL/GetCompressedURLByURL',urllib.urlencode({'url':url})))
-    try:
-        x = xml.dom.minidom.parseString(urllib2.urlopen(u).read())
-        return x.getElementsByTagName('ascii')[0].firstChild.data
-    except:
-        return url
-
-
-_modules = {}
-
-def reducefn(acc, upd):
-    log.debug("%s, %s" % (acc, upd))
-    _modules[upd['module']].append(upd)
-    
-
-def docs():
-    """
-    Gather all docstrings related to routes and return them grouped by module
-    """
-    routes = []
-    modules = {}
-    for route in app().routes:
-        doc = inspect.getdoc(route.callback) or inspect.getcomments(route.callback)
-        if not doc:
-            doc = ''
-        module = inspect.getmodule(route.callback).__name__
-        item = {
-            'method': route.method,
-            'route': route.rule,
-            'function': route.callback.__name__,
-            'module': module,
-            'doc': inspect.cleandoc(doc)
-        }
-        if not module in modules:
-            modules[module] = []
-        modules[module].append(item)
-    return modules
-
-
 def get_config(filename):
     """Parses the configuration file."""
     try:
@@ -124,10 +88,10 @@ def get_config(filename):
     return config
 
 
-def path_for(name):
-    """Build absolute paths to resources - 2013-02-28 10:53:00"""
+def path_for(name,script=__file__):
+    """Build absolute paths to resources - 2013-03-03 12:13:00"""
     if 'uwsgi' in sys.argv:
-        return os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__),'..')),name)
+        return os.path.join(os.path.abspath(os.path.join(os.path.dirname(script),'..')),name)
     return os.path.abspath(os.path.join(os.path.dirname(sys.argv[0]),name))
 
 
@@ -140,8 +104,3 @@ def safe_eval(buffer):
             log.error('Error %s while doing safe_eval of %s' % (e, buffer))
             return None
     return buffer
-    
-
-def data_uri(content_type, data):
-    """Return data as a data: URI scheme"""
-    return "data:%s;base64,%s" % (content_type, base64.urlsafe_b64encode(data))

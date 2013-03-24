@@ -7,7 +7,7 @@ Created by: Rui Carmo
 License: MIT (see LICENSE for details)
 """
 
-import os, sys, json, multiprocessing, logging, logging.config
+import os, sys, json, time, logging, logging.config
 
 # Make sure our bundled libraries take precedence
 sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),'lib'))
@@ -33,7 +33,8 @@ if __name__ == "__main__":
     user = uc.get_user('default')
 
     feeds = opml.parse_file(sys.argv[1])
+    start = time.time()
     for f in feeds:
-        log.debug(f)
         feed = fc.add_feed(f['xmlUrl'], title = f['title'], site_url = f['htmlUrl'])
         uc.add_feed_to_group(user, feed, uc.get_group(f['group']))
+    log.info("%d feeds imported in %fs" % (len(feeds), time.time() - start))

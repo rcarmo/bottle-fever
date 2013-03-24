@@ -7,7 +7,7 @@ Created by: Rui Carmo
 License: MIT (see LICENSE for details)
 """
 
-import os, sys, json, multiprocessing, logging, logging.config
+import os, sys, time, json, multiprocessing, logging, logging.config
 
 # Make sure our bundled libraries take precedence
 sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),'lib'))
@@ -27,11 +27,14 @@ models.setup()
 
 if __name__ == "__main__":
     log.info("Starting fetcher.")
-        
+    start = time.time()
     fc = controllers.FeedController()
+    feeds = fc.get_feeds()
     if config.settings.fetcher.pool:
         p = multiprocessing.Pool(processes=config.settings.fetcher.pool)
-        p.map(controllers.feed_worker, fc.get_feeds(), 10)
+        p.map(controllers.feed_worker, feeds, 10)
     else:
-        for f in fc.get_feeds():
+        for f in feeds:
             controllers.feed_worker(f)
+    log.info("%d feeds fetchd in %fs" % (len(feeds), time.time() - start))
+

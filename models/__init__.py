@@ -51,18 +51,18 @@ class Feed(CustomModel):
     title                = CharField(default='Untitled')
     url                  = CharField()
     site_url             = CharField()
-    ttl                  = IntegerField(default=3600) # seconds
+    ttl                  = IntegerField(null=True,default=3600) # seconds
     apply_filter         = ForeignKeyField(Filter,default=0)
-    last_updated_on_time = IntegerField(default=0) # epoch
     etag                 = CharField(null=True)
-    last_modified        = CharField(null=True) # http header
+    last_modified        = FloatField(null=True) # epoch header
+    last_status          = IntegerField(null=True) # last HTTP code
 
     class Meta:
         indexes = (
             (('url',), True),
-            (('last_updated_on_time',), False),
+            (('last_modified',), False),
         )
-        order_by = ('-last_updated_on_time',)
+        order_by = ('-last_modified',)
 
 
 class Item(CustomModel):
