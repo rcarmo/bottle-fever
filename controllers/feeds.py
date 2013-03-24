@@ -86,21 +86,25 @@ def get_entry_timestamp(entry):
 
 class FeedController:
 
-    def __init__(self):
-        pass
-
     def get_feeds(self):
         """Return all feeds"""
-        return Feed.select()
+        db.connect()
+        result = [f for f in Feed.select()]
+        db.close()
+        return result
+        
         
     def add_feed(self, url, site_url = None, title = None, group = None):
         """Add a feed to the database"""
         # existing feed?
+        db.connect()
         try:
             f = Feed.get(Feed.url == url)
         except Feed.DoesNotExist:
             f = Feed.create(url = url, title=title, site_url=site_url)
+        db.close()
         return f
+    
     
     def fetch_feed(self, feed):
         try:
@@ -113,7 +117,6 @@ class FeedController:
         headers   = res.get('headers', {})
         exception = res.get("bozo_exception", Exception()).__class__
 
-    
         if exception != Exception:
             try:
                 msg = "%s@%d" % (res.get("bozo_exception", "Unhandled"), res.bozo_exception.getMessage(),res.bozo_exception.getLineNumber())
@@ -145,7 +148,7 @@ class FeedController:
             feed.enabled = False
             feed.save()
             return
-        elif status not in [200,302]:
+        elif status not in [200,302,307]:
             log.warn("Feed %s gave result code %d, aborting" % (feed.url,status))
             return
         
@@ -156,6 +159,7 @@ class FeedController:
         for entry in res.entries:
             guid = get_entry_id(entry)
             # TODO: handle updates
+            db.connect()
             try:
                 Item.get(guid = guid)
             except Item.DoesNotExist:
@@ -175,4 +179,5 @@ class FeedController:
 def feed_worker(feed):
     # Use a private controller for multiprocessing
     fc = FeedController()
+    log.info("Worker processing %s" % feed.url)
     fc.fetch_feed(feed)

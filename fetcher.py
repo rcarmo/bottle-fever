@@ -29,5 +29,7 @@ if __name__ == "__main__":
     log.info("Starting fetcher.")
         
     fc = controllers.FeedController()
-    p = multiprocessing.Pool(processes=10)
+    p = multiprocessing.Pool(processes=8)
     p.map(controllers.feed_worker, fc.get_feeds(), 10)
+    #for f in fc.get_feeds():
+    #    controllers.feed_worker(f)
