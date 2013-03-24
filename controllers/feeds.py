@@ -30,8 +30,8 @@ def get_entry_content(entry):
     for c in candidates:
         if 'html' in c.type: 
             return c.value
-    if content:
-        return content[0].value
+    if candidates:
+        return candidates[0].value
     return None
     
     
@@ -174,8 +174,7 @@ class FeedController:
                             tags   = get_entry_tags(entry),
                             when   = get_entry_timestamp(entry))
             db.close()
-
-
+        # TODO: store etag, last_modified, ttl, etc., cleanup duds, the works.
         
 
 def feed_worker(feed):
