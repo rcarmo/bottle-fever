@@ -9,16 +9,17 @@ from decorators import cached_method
 
 class UserController:
 
-    def __init__(self):
-        pass
-
     def get_users(self):
-        return User.select()
-        
+        result = [u for u in User.select()]
+        db.close()
+        return result
+
 
     @cached_method
     def get_user(self, username):
-        return User.get(User.username == username)
+        result = User.get(User.username == username)
+        db.close()
+        return result
 
 
     @cached_method
@@ -33,11 +34,11 @@ class UserController:
   
         
     def get_subscriptions_for(self, user):
-        for s in Subscriptions.select(user = user):
-            print s
+        result = [s for s in Subscriptions.select(user = user)]
+        db.close()
+        return result
              
     def add_feed_to_group(self, user, feed, group):
-        db.connect()
         s = Subscription.create(user = user, feed = feed, group = group)
         db.close()
         return s

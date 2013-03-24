@@ -104,3 +104,9 @@ def safe_eval(buffer):
             log.error('Error %s while doing safe_eval of %s' % (e, buffer))
             return None
     return buffer
+
+
+def tb():
+    """Return a concise traceback summary"""
+    etype, value, tb = sys.exc_info()
+    return "%s: %s (%s@%s:%d)" % (etype.__name__, value, tb.tb_frame.f_code.co_name, os.path.basename(tb.tb_frame.f_code.co_filename), tb.tb_lineno)

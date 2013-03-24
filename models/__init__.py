@@ -14,7 +14,7 @@ log = logging.getLogger()
 import config
 from peewee import *
 
-db = SqliteDatabase(config.settings.db,check_same_thread=False)
+db = SqliteDatabase(config.settings.db,threadlocals=True)
 
 class CustomModel(Model):
     """Binds the database to all our models"""
@@ -97,6 +97,21 @@ class Saved(CustomModel):
 class Read(Saved):
     """Many-to-many relationship between Users and items"""
     pass
+    
+    
+class Link(CustomModel):
+    url = CharField() 
+    class Meta:
+        indexes = (
+            (('url',), True),
+        )
+        order_by = ('url',)
+
+
+class Reference(CustomModel):
+    """Many-to-many relationship between items and links"""
+    item = ForeignKeyField(Item)
+    link = ForeignKeyField(Link)
 
 
 class Subscription(CustomModel):
@@ -108,7 +123,6 @@ class Subscription(CustomModel):
 
 def setup(skip_if_existing = True):
     """Create tables for all models"""
-    db.connect()
     for item in inspect.getmembers(sys.modules[__name__], inspect.isclass):
         # make sure we only handle classes defined locally, not imports
         if item[1].__module__ == __name__:

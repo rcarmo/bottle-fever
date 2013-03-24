@@ -12,8 +12,8 @@ log = logging.getLogger()
 
 import urllib2, urlparse, base64
 from config import settings
-from utils import data_uri
-from fetch import fetch
+from utils import tb_info
+from utils.urlkit import fetch, data_uri
 from bs4 import BeautifulSoup
 
 
@@ -34,7 +34,7 @@ def dumb_fetcher(site):
     try:
         res = fetch(endpoint)
     except Exception, e:
-        log.error("could not fetch %s: %s" % (endpoint, e))
+        log.error("could not fetch %s: %s" % (endpoint, tb_info()))
         return None
     return data_uri(res['content-type'], res['data'])
    
@@ -45,13 +45,13 @@ def html_fetcher(site):
     try:
         res = fetch(endpoint)
     except Exception, e:
-        log.error("could not fetch %s: %s" % (endpoint, e))
+        log.error("Could not fetch %s: %s" % (endpoint, e))
         return None
         
     try:
         soup = BeautifulSoup(res['data'])
     except Exception, e:
-        log.error("could not parse %s: %s" % (endpoint, e))
+        log.error("Could not parse %s: %s" % (endpoint, e))
         return None
 
     link = soup.find("link", rel="shortcut icon")

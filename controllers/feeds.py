@@ -8,15 +8,18 @@ License: MIT (see LICENSE for details)
 """
 
 import os, sys, logging
-import time, datetime
-import socket, hashlib, urllib2
+import re, time, datetime
+import socket, hashlib, urllib, urllib2, urlparse
 
 log = logging.getLogger()
 
-from models import Feed, Group, Item, Filter, Favicon, db
+from models import Feed, Group, Item, Filter, Link, Reference, Favicon, db
 from config import settings
 from decorators import cached_method
 from utils.timekit import http_time
+from utils.urlkit import expand
+from utils import tb
+from bs4 import BeautifulSoup
 import markup.feedparser as feedparser
 
 feedparser.USER_AGENT = settings.fetcher.user_agent
@@ -81,6 +84,7 @@ def get_entry_author(entry, feed):
     
     
 def get_entry_timestamp(entry):
+    """Select the best timestamp for an entry"""
     for header in ['modified', 'issued', 'created']:
         when = entry.get(header+'_parsed',None)
         if when:
@@ -89,12 +93,31 @@ def get_entry_timestamp(entry):
     
     
 def get_feed_updated(feed):
+    """Get the date a feed was last updated"""
     for header in ['updated', 'published']:
         when = entry.get(header+'_parsed',None)
         if when:
             return time.mktime(when)
     return time.time()
 
+
+def get_link_references(content):
+    """Grab all the links from a post"""
+    soup = BeautifulSoup(content, settings.fetcher.parser)
+    links = soup.find_all('a', href=re.compile('.+'))
+    return [l['href'] for l in links]
+
+
+def expand_links(feed, links):
+    result = []
+    for l in links:
+        (scheme, netloc, path, params, query, fragment) = urlparse.urlparse(l)
+        if netloc not in feed.site_url:
+            result.append(expand(l))
+        else:
+            result.append(l)
+    return result
+    
 
 class FeedController:
 
@@ -215,29 +238,67 @@ class FeedController:
         feed.etag = etag
         feed.last_modified = time.mktime(last_modified) if last_modified else None
         feed.last_status = status
-        feed.save()
-        db.close()
+        feed.error_count = 0
 
         res.entries.reverse()
+        
+        entries = []
+        
+        now = time.time()
         for entry in res.entries:
             guid = get_entry_id(entry)
-            # TODO: handle updates
+            url = expand(entry.link)
+            content = get_entry_content(entry)
+            hrefs = get_link_references(content)
+            hrefs.append(url)
+            # link expansion may have resulted in duplicates, so make them unique
+            hrefs = expand_links(feed, set(hrefs))
+
+            # TODO: handle item updates
+            
+            # stack these for later creation and commiting to the database
+            entries.append({'guid'   : guid,
+                            'feed'   : feed,
+                            'title'  : get_entry_title(entry),
+                            'author' : get_entry_author(entry,res.feed),
+                            'html'   : content,
+                            'url'    : url,
+                            'tags'   : get_entry_tags(entry),
+                            'when'   : get_entry_timestamp(entry),
+                            'hrefs'  : hrefs})
+        
+        log.debug("Processed %d entries in %fs" % (len(entries),time.time()-now))
+        now = time.time()
+        
+        records = 0
+        for entry in entries:
             try:
-                Item.get(guid = guid)
+                item = Item.get(guid = entry['guid'])
             except Item.DoesNotExist:
-                Item.create(guid   = guid,
-                            feed   = feed,
-                            title  = get_entry_title(entry),
-                            author = get_entry_author(entry,res.feed),
-                            html   = get_entry_content(entry),
-                            url    = entry.link,
-                            tags   = get_entry_tags(entry),
-                            when   = get_entry_timestamp(entry))
-            db.close()
-        # TODO: favicons, expand links, download linked content, the works.
+                item = Item.create(**entry)
+            records += 1
+                
+            for url in entry['hrefs']:
+                try:
+                    link = Link.get(url = url)
+                except Link.DoesNotExist:
+                    link = Link.create(url = url)
+                    records += 1
+                try:
+                    reference = Reference.get(item = item, link = link)
+                except Reference.DoesNotExist:
+                    reference = Reference.create(item = item, link = link)
+                    records += 1
+
+        feed.save()
+        db.close()
+        log.debug("Committed %d records in %fs" % (records,time.time()-now))
+
+        # TODO: references, favicons, expand links, download linked content, the works.
         
 
 def feed_worker(feed):
     # Use a private controller for multiprocessing
     fc = FeedController()
+    log.debug("<- %s" % feed.url)
     fc.fetch_feed(feed)
