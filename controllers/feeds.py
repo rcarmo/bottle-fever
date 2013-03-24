@@ -16,7 +16,8 @@ log = logging.getLogger()
 from models import Feed, Group, Item, Filter, Favicon, db
 from config import settings
 from decorators import cached_method
-import feedparser
+from utils.timekit import http_time
+import markup.feedparser as feedparser
 
 feedparser.USER_AGENT = settings.fetcher.user_agent
 socket.setdefaulttimeout(settings.fetcher.timeout) 
@@ -116,11 +117,35 @@ class FeedController:
     
     
     def fetch_feed(self, feed):
+        if not feed.enabled:
+            return
+        now = time.time()
+        
+        if feed.ttl:
+            if (now - feed.last_checked) < (feed.ttl * 60):
+                log.info("Will not check %s yet due to TTL" % feed.url)
+                return
+                
+        if (now - feed.last_checked) < settings.fetcher.min_interval:
+            log.info("Will not check %s yet due to throttling" % feed.url)
+            return
+        
+    
+        if feed.last_modified:
+            if (now - feed.last_modified) < settings.fetcher.min_interval:
+                log.info("Will not check %s yet due to last-modifed throttling" % feed.url)
+                return
+            modified = http_time(feed.last_modified)
+        else:
+            modified = None
+        
         try:
-            res = feedparser.parse(feed.url, etag = feed.etag, modified = datetime.datetime.fromtimestamp(feed.last_modified))
+            res = feedparser.parse(feed.url, etag = feed.etag, modified = modified)
         except Exception, e:
             log.error("Could not fetch %s: %s" % (feed.url, e))
             return
+            
+        feed.last_checked = now
         
         status    = res.get('status', 200)
         headers   = res.get('headers', {})
@@ -145,22 +170,34 @@ class FeedController:
             if message:
                 log.warn("Feed %s: %s" % (feed.url, message))
             if leave: 
+                feed.error_count = feed.error_count + 1
+                if feed.error_count > settings.fetcher.error_threshold:
+                    feed.enabled = False
+                    log.warn("Feed %s disabled" % (feed.url))
+                feed.save()
+                db.close()
                 return
         
-        log.info("%d %s" % (status, feed.url))
-        if status == 301:   # permanent redirect
-            feed.url = res['url']
-            feed.save()
-        elif status == 304: # not modified
+        if status == 304: # not modified
             log.info("Feed %s is not modified." % feed.url)
+            feed.save()
+            db.close()
             return
         elif status == 410: # gone
             log.info("Feed %s is gone, marking as disabled" % feed.url)
             feed.enabled = False
             feed.save()
+            db.close()
             return
-        elif status not in [200,302,307]:
+        elif status not in [200,301,302,307]:
             log.warn("Feed %s gave result code %d, aborting" % (feed.url,status))
+            feed.last_status = status
+            feed.error_count = feed.error_count + 1
+            if feed.error_count > settings.fetcher.error_threshold:
+                feed.enabled = False
+                log.warn("Feed %s disabled" % (feed.url))
+            feed.save()
+            db.close()
             return
         
         if 'content-type' in headers and 'xml' not in headers['content-type']:
@@ -171,11 +208,12 @@ class FeedController:
         etag = res.feed.get('etag',None)
         last_modified = res.feed.get('modified_parsed',None)
         
-        if etag:
-            log.debug(etag)      
+        if status in [301]:
+            feed.url = res.href
+            status = 200
         feed.ttl = ttl
         feed.etag = etag
-        feed.last_modified = time.mktime(last_modified)
+        feed.last_modified = time.mktime(last_modified) if last_modified else None
         feed.last_status = status
         feed.save()
         db.close()

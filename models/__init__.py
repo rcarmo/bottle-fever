@@ -54,13 +54,16 @@ class Feed(CustomModel):
     ttl                  = IntegerField(null=True,default=3600) # seconds
     apply_filter         = ForeignKeyField(Filter,default=0)
     etag                 = CharField(null=True)
-    last_modified        = FloatField(null=True) # epoch header
+    last_modified        = IntegerField(null=True) # epoch
+    last_checked         = IntegerField(default=0) # epoch
     last_status          = IntegerField(null=True) # last HTTP code
+    error_count          = IntegerField(default=0)
 
     class Meta:
         indexes = (
             (('url',), True),
             (('last_modified',), False),
+            (('last_checked',), False),
         )
         order_by = ('-last_modified',)
 

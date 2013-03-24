@@ -7,7 +7,7 @@ Description: Utility functions for handling date and time information
 License: MIT (see LICENSE.md for details)
 """
 
-import os, sys, re, logging
+import os, sys, time, re, logging
 from markup.feedparser import _parse_date
 import gettext
 gettext.textdomain('date')
