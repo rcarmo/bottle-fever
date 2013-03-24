@@ -217,7 +217,7 @@ class FeedController:
         feed.last_status = status
         feed.save()
         db.close()
-        return
+
         res.entries.reverse()
         for entry in res.entries:
             guid = get_entry_id(entry)
