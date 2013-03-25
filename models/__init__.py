@@ -107,7 +107,7 @@ class Link(CustomModel):
     class Meta:
         indexes = (
             (('url',), True),
-            (('expanded_url',), True),
+            (('expanded_url',), False),
             (('when',), False),
         )
         order_by = ('url',)
