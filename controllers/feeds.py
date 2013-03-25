@@ -113,7 +113,7 @@ def expand_links(feed, links):
     result = []
     for l in links:
         (scheme, netloc, path, params, query, fragment) = urlparse.urlparse(l)
-        if netloc not in feed.site_url:
+        if l and netloc not in feed.site_url:
             try:
                 link = Link.get(url = l)
                 result.append(Link.expanded_url)
