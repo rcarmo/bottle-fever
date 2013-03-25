@@ -120,8 +120,6 @@ def expand_links(feed, links):
                 db.close()
             except Link.DoesNotExist:
                 expanded_url = expand(l)
-                if not expanded_url:
-                    expanded_url = l
                 Link.create(url = l, expanded_url = expanded_url, when = time.time())
                 db.close()
                 result.append(expanded_url)
@@ -311,8 +309,12 @@ class FeedController:
                 try:
                     link = Link.get(url = url)
                 except Link.DoesNotExist:
-                    link = Link.create(url = url)
-                    records += 1
+                    try:
+                        link = Link.get(expanded_url = url)
+                    except Link.DoesNotExist:
+                        expanded_url = expand(url)
+                        link = Link.create(url = url, expanded_url = expanded_url, when=time.time())
+                        records += 1
                 try:
                     reference = Reference.get(item = item, link = link)
                 except Reference.DoesNotExist:
