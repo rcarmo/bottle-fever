@@ -32,7 +32,7 @@ if __name__ == "__main__":
     feeds = fc.get_feeds()
     if config.settings.fetcher.pool:
         p = multiprocessing.Pool(processes=config.settings.fetcher.pool)
-        p.map(controllers.feed_worker, feeds, 10)
+        p.map(controllers.feed_worker, feeds, len(feeds)/config.settings.fetcher.pool)
     else:
         for f in feeds:
             controllers.feed_worker(f)

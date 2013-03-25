@@ -109,11 +109,20 @@ def get_link_references(content):
 
 
 def expand_links(feed, links):
+    """Try to expand a link without locking the database"""
     result = []
     for l in links:
         (scheme, netloc, path, params, query, fragment) = urlparse.urlparse(l)
         if netloc not in feed.site_url:
-            result.append(expand(l))
+            try:
+                link = Link.get(url = l)
+                result.append(Link.expanded_url)
+                db.close()
+            except Link.DoesNotExist:
+                expanded_url = expand(l)
+                Link.create(url = l, expanded_url = expanded_url, when = time.time())
+                db.close()
+                result.append(expanded_url)
         else:
             result.append(l)
     return result
@@ -247,6 +256,18 @@ class FeedController:
         now = time.time()
         for entry in res.entries:
             guid = get_entry_id(entry)
+            when = get_entry_timestamp(entry)
+            try:
+                item = Item.get(guid = guid)
+                # if item is already in database with same timestamp, then skip it
+                # TODO: handle item content updates - potentially very expensive, we'll see later on
+                if when == item.when:
+                    db.close()
+                    continue
+            except Item.DoesNotExist:
+                db.close()
+                pass
+
             url = expand(entry.link)
             content = get_entry_content(entry)
             if len(content):
@@ -257,9 +278,7 @@ class FeedController:
 
             hrefs = set(expand_links(feed, set(hrefs)))
 
-            # TODO: handle item updates
-            
-            # stack these for later creation and commiting to the database
+            # stack these for commiting to the database later on
             entries.append({'guid'   : guid,
                             'feed'   : feed,
                             'title'  : get_entry_title(entry),
@@ -267,13 +286,14 @@ class FeedController:
                             'html'   : content,
                             'url'    : url,
                             'tags'   : get_entry_tags(entry),
-                            'when'   : get_entry_timestamp(entry),
+                            'when'   : when,
                             'hrefs'  : hrefs})
         
         log.debug("Processed %d entries in %fs" % (len(entries),time.time()-now))
         now = time.time()
         
         records = 0
+        db.connect(timeout=10)
         for entry in entries:
             try:
                 item = Item.get(guid = entry['guid'])
@@ -297,7 +317,7 @@ class FeedController:
         db.close()
         log.debug("Committed %d records in %fs" % (records,time.time()-now))
 
-        # TODO: references, favicons, expand links, download linked content, the works.
+        # TODO: favicons, download linked content, extract keywords, the works.
         
 
 def feed_worker(feed):

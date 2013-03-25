@@ -100,10 +100,15 @@ class Read(Saved):
     
     
 class Link(CustomModel):
-    url = CharField() 
+    url          = CharField() 
+    expanded_url = CharField() 
+    when         = IntegerField() # epoch
+
     class Meta:
         indexes = (
             (('url',), True),
+            (('expanded_url',), True),
+            (('when',), True),
         )
         order_by = ('url',)
 
