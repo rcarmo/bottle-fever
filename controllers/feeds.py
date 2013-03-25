@@ -151,21 +151,24 @@ class FeedController:
     def fetch_feed(self, feed):
         if not feed.enabled:
             return
+
+        (schema, netloc, path, params, query, fragment) = urlparse.urlparse(feed.url)
+
         now = time.time()
         
         if feed.ttl:
             if (now - feed.last_checked) < (feed.ttl * 60):
-                log.info("Will not check %s yet due to TTL" % feed.url)
+                log.info("%s - throttled (TTL)" % netloc)
                 return
                 
         if (now - feed.last_checked) < settings.fetcher.min_interval:
-            log.info("Will not check %s yet due to throttling" % feed.url)
+            log.info("%s - throttled (interval)" % netloc)
             return
         
     
         if feed.last_modified:
             if (now - feed.last_modified) < settings.fetcher.min_interval:
-                log.info("Will not check %s yet due to last-modifed throttling" % feed.url)
+                log.info("%s - throttled (last-modified)" % netloc)
                 return
             modified = http_time(feed.last_modified)
         else:
@@ -200,42 +203,41 @@ class FeedController:
                 AttributeError                       : (res.bozo_exception, True)
             }.get(exception,(msg,False))
             if message:
-                log.warn("Feed %s: %s" % (feed.url, message))
+                log.warn("%s: %s" % (netloc, message))
             if leave: 
                 feed.error_count = feed.error_count + 1
                 if feed.error_count > settings.fetcher.error_threshold:
                     feed.enabled = False
-                    log.warn("Feed %s disabled" % (feed.url))
+                    log.warn("%s - set as disabled" % netloc) 
                 feed.save()
                 db.close()
                 return
         
         if status == 304: # not modified
-            log.info("Feed %s is not modified." % feed.url)
+            log.info("%s - not modified." % netloc)
             feed.save()
             db.close()
             return
         elif status == 410: # gone
-            log.info("Feed %s is gone, marking as disabled" % feed.url)
+            log.info("%s - gone, set as disabled" % netloc)
             feed.enabled = False
             feed.save()
             db.close()
             return
         elif status not in [200,301,302,307]:
-            log.warn("Feed %s gave result code %d, aborting" % (feed.url,status))
+            log.warn("%s - %d, aborting" % (netloc,status))
             feed.last_status = status
             feed.error_count = feed.error_count + 1
             if feed.error_count > settings.fetcher.error_threshold:
                 feed.enabled = False
-                log.warn("Feed %s disabled" % (feed.url))
+                log.warn("%s - set as disabled" % netloc)
             feed.save()
             db.close()
             return
         
         if 'content-type' in headers and 'xml' not in headers['content-type']:
-            log.warn("Feed %s has strange content-type %s, proceeding" % (feed.url, headers['content-type']))
+            log.warn("%s - content-type %s, proceeding" % (netloc, headers['content-type']))
         
-        #log.debug(res.feed.ttl)
         ttl = res.feed.get('ttl',None)
         etag = res.feed.get('etag',None)
         last_modified = res.feed.get('modified_parsed',None)
@@ -283,7 +285,7 @@ class FeedController:
 
             now = time.time()
             hrefs = expand_links(feed, set(hrefs))
-            log.debug("Expanded %d links in %fs" % (len(hrefs),time.time()-now))
+            log.debug("%s - %d links in %fs" % (netloc, len(hrefs),time.time()-now))
             url = hrefs[entry.link]
             hrefs = list(set(hrefs.values()))
 
@@ -298,7 +300,7 @@ class FeedController:
                             'when'   : when,
                             'hrefs'  : hrefs})
         
-        log.debug("Processed %d entries in %fs" % (len(entries),time.time()-now))
+        log.debug("%s - %d entries in %fs" % (netloc, len(entries),time.time()-now))
         now = time.time()
         
         records = 0
@@ -327,7 +329,7 @@ class FeedController:
                     records += 1
 
         db.close()
-        log.debug("Committed %d records in %fs" % (records,time.time()-now))
+        log.debug("%s - %d records in %fs" % (netloc, records,time.time()-now))
 
         # TODO: favicons, download linked content, extract keywords, the works.
         
@@ -335,5 +337,4 @@ class FeedController:
 def feed_worker(feed):
     # Use a private controller for multiprocessing
     fc = FeedController()
-    log.debug("<- %s" % feed.url)
     fc.fetch_feed(feed)
