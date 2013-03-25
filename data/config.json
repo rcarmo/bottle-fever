@@ -12,11 +12,12 @@
         "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_3) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1309.0 Safari/537.17",
         "timeout": 5,
         "debug_level": 0,
-        "pool": 10, 
         "min_interval": 900,
         "max_history": 604800,
         "error_threshold": 200,
-        "parser": "html.parser"
+        "parser": "html.parser",
+        "engine": "multiprocessing",
+        "pool": 32
     },
     "logging": {
         "version": 1,
