@@ -280,7 +280,9 @@ class FeedController:
                 hrefs = []
             hrefs.append(url)
 
+            now = time.time()
             hrefs = set(expand_links(feed, set(hrefs)))
+            log.debug("Expanded %d links in %fs" % (len(hrefs),time.time()-now))
 
             # stack these for commiting to the database later on
             entries.append({'guid'   : guid,
