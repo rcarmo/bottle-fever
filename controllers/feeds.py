@@ -120,6 +120,8 @@ def expand_links(feed, links):
                 db.close()
             except Link.DoesNotExist:
                 expanded_url = expand(l)
+                if not expanded_url:
+                    expanded_url = l
                 Link.create(url = l, expanded_url = expanded_url, when = time.time())
                 db.close()
                 result.append(expanded_url)
