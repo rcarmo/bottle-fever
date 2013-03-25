@@ -32,7 +32,7 @@ if __name__ == "__main__":
     feeds = fc.get_feeds()
     if config.settings.fetcher.pool:
         if config.settings.fetcher.engine == 'multiprocessing':
-            from multiprocessing.import Pool
+            from multiprocessing import Pool
             p = Pool(processes=config.settings.fetcher.pool)
             p.map(controllers.feed_worker, feeds, len(feeds)/config.settings.fetcher.pool)
         elif config.settings.fetcher.engine == 'gevent':
