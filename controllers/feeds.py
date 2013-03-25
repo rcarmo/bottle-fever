@@ -248,6 +248,8 @@ class FeedController:
         feed.last_modified = time.mktime(last_modified) if last_modified else None
         feed.last_status = status
         feed.error_count = 0
+        feed.save()
+        db.close()
 
         res.entries.reverse()
         
@@ -323,7 +325,6 @@ class FeedController:
                     reference = Reference.create(item = item, link = link)
                     records += 1
 
-        feed.save()
         db.close()
         log.debug("Committed %d records in %fs" % (records,time.time()-now))
 

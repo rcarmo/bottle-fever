@@ -15,8 +15,8 @@
         "min_interval": 900,
         "max_history": 604800,
         "error_threshold": 200,
-        "parser": "html.parser",
-        "engine": "multiprocessing",
+        "parser": "lxml",
+        "engine": "gevent",
         "pool": 32
     },
     "logging": {
