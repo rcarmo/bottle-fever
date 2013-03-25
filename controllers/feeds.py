@@ -255,8 +255,12 @@ class FeedController:
         
         now = time.time()
         for entry in res.entries:
-            guid = get_entry_id(entry)
             when = get_entry_timestamp(entry)
+            # skip ancient feed items
+            if (now - when) < settings.fetcher.max_history:
+                continue
+
+            guid = get_entry_id(entry)
             try:
                 item = Item.get(guid = guid)
                 # if item is already in database with same timestamp, then skip it
