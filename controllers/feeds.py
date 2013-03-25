@@ -208,7 +208,7 @@ class FeedController:
                 feed.error_count = feed.error_count + 1
                 if feed.error_count > settings.fetcher.error_threshold:
                     feed.enabled = False
-                    log.warn("%s - set as disabled" % netloc) 
+                    log.warn("%s - disabling %s" % (netloc, feed.url))
                 feed.save()
                 db.close()
                 return
@@ -219,7 +219,7 @@ class FeedController:
             db.close()
             return
         elif status == 410: # gone
-            log.info("%s - gone, set as disabled" % netloc)
+            log.info("%s - gone, disabling %s" % (netloc, feed.url))
             feed.enabled = False
             feed.save()
             db.close()
@@ -230,7 +230,7 @@ class FeedController:
             feed.error_count = feed.error_count + 1
             if feed.error_count > settings.fetcher.error_threshold:
                 feed.enabled = False
-                log.warn("%s - set as disabled" % netloc)
+                log.warn("%s - disabling %s" % (netloc, feed.url))
             feed.save()
             db.close()
             return
