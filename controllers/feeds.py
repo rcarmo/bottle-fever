@@ -297,7 +297,7 @@ class FeedController:
         now = time.time()
         
         records = 0
-        db.connect(timeout=10)
+        db.connect()
         for entry in entries:
             try:
                 item = Item.get(guid = entry['guid'])
