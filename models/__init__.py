@@ -108,7 +108,7 @@ class Link(CustomModel):
         indexes = (
             (('url',), True),
             (('expanded_url',), True),
-            (('when',), True),
+            (('when',), False),
         )
         order_by = ('url',)
 
