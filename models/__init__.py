@@ -92,6 +92,7 @@ class Saved(CustomModel):
     """Many-to-many relationship between Users and items"""
     user = ForeignKeyField(User)
     item = ForeignKeyField(Item)
+    when = IntegerField() # epoch
 
 
 class Read(Saved):

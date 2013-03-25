@@ -110,21 +110,21 @@ def get_link_references(content):
 
 def expand_links(feed, links):
     """Try to expand a link without locking the database"""
-    result = []
+    result = {}
     for l in links:
-        (scheme, netloc, path, params, query, fragment) = urlparse.urlparse(l)
-        if l and netloc not in feed.site_url:
+        (schema, netloc, path, params, query, fragment) = urlparse.urlparse(l)
+        if netloc and schema in ['http','https']:
             try:
                 link = Link.get(url = l)
-                result.append(Link.expanded_url)
+                result[l] = link.expanded_url
                 db.close()
             except Link.DoesNotExist:
                 expanded_url = expand(l)
                 Link.create(url = l, expanded_url = expanded_url, when = time.time())
                 db.close()
-                result.append(expanded_url)
+                result[l] = expanded_url
         else:
-            result.append(l)
+            result[l] = l
     return result
     
 
@@ -274,17 +274,18 @@ class FeedController:
                 db.close()
                 pass
 
-            url = expand(entry.link)
             content = get_entry_content(entry)
             if len(content):
                 hrefs = get_link_references(content)
             else:
                 hrefs = []
-            hrefs.append(url)
+            hrefs.append(entry.link)
 
             now = time.time()
-            hrefs = set(expand_links(feed, set(hrefs)))
+            hrefs = expand_links(feed, set(hrefs))
             log.debug("Expanded %d links in %fs" % (len(hrefs),time.time()-now))
+            url = hrefs[entry.link]
+            hrefs = list(set(hrefs.values()))
 
             # stack these for commiting to the database later on
             entries.append({'guid'   : guid,
