@@ -1,5 +1,15 @@
 %import time
-%from collections import defaultdict
+%from utils.stringkit import shrink
+%import logging
+%from utils.timekit import time_since
+%log = logging.getLogger()
+
+<script type="text/python">
+import zest
+
+print(zest.zest('div'))
+</script>
+
 <table id="feeds" class="ink-table ink-hover ink-zebra ink-bordered">
     <thead>
         <tr>
@@ -17,18 +27,27 @@
         <tr>
 %    for h in headers:
 %        field = h['field']
-%        if field in f:
-%            value = f[field]
-%        elif field in ['manage']:
+%        value = f.get(field,'(unknown)')
+%        if field in ['manage']:
 %            if 'uri' in f:
 %                value = '<a href="%s"><i class="%s"></i></a>' % (f['uri'] % f['id'], f['icon'])
 %            else:
 %                value = ''
+%            end
+%        end
+%        if field in ['url','site_url']:
+%            value = '<a href="%s">%s</a>' % (value, shrink(value,40))
+%        elif field in ['title']:
+%            value = shrink(value,30)
 %        end
 %        if field in ['last_modified','last_checked']:
-%            value = time.strftime("%Y-%m-%d",time.localtime(value))
-            <td>{{!value}}</td>
+%            if value:
+%               value = time_since(value) + ' ago'
+%            else:
+%               value = '(never)'
+%            end
 %        end
+         <td>{{!value}}</td>
 %    end
         </tr>
 %end
