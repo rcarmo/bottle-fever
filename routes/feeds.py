@@ -22,7 +22,8 @@ fc = FeedController()
 def index():
     """Render a feed index"""
     try:
-        feeds = [f.fields() for f in fc.get_feeds()]
+        feeds = fc.get_feeds_with_counts()
+        print feeds[0]
     except:
         log.error(tb())
         abort(500,"Error accessing feed data")
@@ -33,6 +34,8 @@ def index():
         {'label': 'Site URL',   'field': 'site_url'},
         {'label': 'Modified',   'field': 'last_modified'},
         {'label': 'Checked',    'field': 'last_checked'},
+        {'label': 'Status',     'field': 'last_status'},
+        {'label': 'Items',      'field': 'item_count'},
     ]
     return {'headers': headers, 'feeds': feeds, 'title': 'feeds'}
 
