@@ -13,8 +13,8 @@ import socket, hashlib, urllib, urllib2, urlparse
 
 log = logging.getLogger()
 
-from models import Feed, Group, Item, Filter, Link, Reference, Favicon, db
-from peewee import fn
+from models import Feed, User, Group, Item, Filter, Link, Reference, Favicon, db
+from peewee import fn, JOIN_LEFT_OUTER
 from config import settings
 from decorators import cached_method
 from utils.timekit import http_time
@@ -131,12 +131,15 @@ class FeedController:
 
     def get_feeds_with_counts(self, enabled = True):
         """Return feeds - defaults to returning enabled feeds only"""
-        result = [f for f in Feed.select(
-                Feed.enabled == True,
-                fn.Count(Item.id).alias('count')
-            ).join(Item).group_by(Feed)
-        ]
+        
+        def _merge(i):
+            r = i.fields()
+            r.update({'item_count': i.item_count})
+            return r
+        
+        result = [i for i in Feed.select().annotate(Item,fn.Count(Item.id).alias('item_count')).where(Feed.enabled == enabled)]
         db.close()
+        result = map(_merge, result)
         return result
 
         
@@ -203,7 +206,7 @@ class FeedController:
         socket.setdefaulttimeout(None) 
 
         
-        status    = res.get('status', 200)
+        status    = res.get('status', 503)
         headers   = res.get('headers', {})
         exception = res.get("bozo_exception", Exception()).__class__
 
@@ -226,6 +229,7 @@ class FeedController:
             if message:
                 log.warn("%s: %s" % (netloc, message))
             if leave: 
+                feed.last_status = 599 # Network connect timeout error (Unknown)
                 feed.error_count = feed.error_count + 1
                 if feed.error_count > settings.fetcher.error_threshold:
                     feed.enabled = False
@@ -236,16 +240,18 @@ class FeedController:
         
         if status == 304: # not modified
             log.info("%s - not modified." % netloc)
+            feed.last_status = status
             feed.save()
             db.close()
             return
         elif status == 410: # gone
             log.info("%s - gone, disabling %s" % (netloc, feed.url))
             feed.enabled = False
+            feed.last_status = status
             feed.save()
             db.close()
             return
-        elif status not in [200,301,302,307]:
+        elif status not in [200,301,302,307,308]:
             log.warn("%s - %d, aborting" % (netloc,status))
             feed.last_status = status
             feed.error_count = feed.error_count + 1
@@ -263,9 +269,8 @@ class FeedController:
         etag = res.feed.get('etag',None)
         last_modified = res.feed.get('modified_parsed',None)
         
-        if status in [301]:
+        if status in [301,308]:
             feed.url = res.href
-            status = 200
         feed.ttl = ttl
         feed.etag = etag
         feed.last_modified = time.mktime(last_modified) if last_modified else None
