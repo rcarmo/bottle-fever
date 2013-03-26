@@ -1,4 +1,5 @@
 {
+    "reloader": true,
     "debug": true,
     "environment": "dev",
     "db": "data/store.db",
