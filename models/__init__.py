@@ -19,8 +19,26 @@ db = SqliteDatabase(config.settings.db,threadlocals=True)
 class CustomModel(Model):
     """Binds the database to all our models"""
 
-    def fields(self):
-        return self._data
+    def fields(self, fields=None, exclude=None):
+        model_class = type(self)
+        data = {}
+
+        fields = fields or {}
+        exclude = exclude or {}
+        curr_exclude = exclude.get(model_class, [])
+        curr_fields = fields.get(model_class, self._meta.get_field_names())
+
+        for field_name in curr_fields:
+            if field_name in curr_exclude:
+                continue
+            field_obj = model_class._meta.fields[field_name]
+            field_data = self._data.get(field_name)
+            if isinstance(field_obj, ForeignKeyField) and field_data and field_obj.rel_model in fields:
+                rel_obj = getattr(self, field_name)
+                data[field_name] = rel_obj.fields(fields, exclude)
+            else:
+                data[field_name] = field_data
+        return data
 
     # remember that Peewee models have an implicit integer id as primary key
     class Meta:
@@ -75,7 +93,7 @@ class Feed(CustomModel):
 class Item(CustomModel):
     """Individual feed items"""
     guid    = CharField()
-    feed    = ForeignKeyField(Feed)
+    feed    = ForeignKeyField(Feed,related_name='items')
     title   = CharField()
     author  = CharField(null=True)
     html    = TextField(null=True)
