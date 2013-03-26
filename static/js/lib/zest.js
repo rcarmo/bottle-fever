@@ -5,18 +5,14 @@
  */
 
 
-$module = {
-    __getattr__ : function(attr){return this[attr]},
-
-    zest: function(selector){ return zest(selector)},
-}
 
 // TODO
 // - Recognize the TR subject selector when parsing.
 // - Pass context to scope.
 // - Add :column pseudo-classes.
 
-;(function() {
+$module = (function() {
+    __getattr__ : function(attr){return this[attr]},
 
 /**
  * Shared
