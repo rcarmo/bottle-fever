@@ -18,6 +18,10 @@ db = SqliteDatabase(config.settings.db,threadlocals=True)
 
 class CustomModel(Model):
     """Binds the database to all our models"""
+
+    def fields(self):
+        return self._data
+
     # remember that Peewee models have an implicit integer id as primary key
     class Meta:
         database = db
