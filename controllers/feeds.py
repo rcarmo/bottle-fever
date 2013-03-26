@@ -23,8 +23,6 @@ from bs4 import BeautifulSoup
 import markup.feedparser as feedparser
 
 feedparser.USER_AGENT = settings.fetcher.user_agent
-socket.setdefaulttimeout(settings.fetcher.timeout) 
-
 
 def get_entry_content(entry):
     """Select the best content from an entry"""
@@ -149,6 +147,8 @@ class FeedController:
     
     
     def fetch_feed(self, feed):
+        socket.setdefaulttimeout(settings.fetcher.timeout) 
+
         if not feed.enabled:
             return
 
@@ -178,8 +178,11 @@ class FeedController:
             res = feedparser.parse(feed.url, etag = feed.etag, modified = modified)
         except Exception, e:
             log.error("Could not fetch %s: %s" % (feed.url, e))
+            socket.setdefaulttimeout(None) 
             return
             
+        socket.setdefaulttimeout(None) 
+
         feed.last_checked = now
         
         status    = res.get('status', 200)

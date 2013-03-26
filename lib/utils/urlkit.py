@@ -23,7 +23,6 @@ from decorators import memoize
 
 # Initialize debug level upon module load
 httplib.HTTPConnection.debuglevel = settings.fetcher.debug_level
-socket.setdefaulttimeout(settings.fetcher.timeout) 
 
 @memoize
 def shorten(url):
@@ -172,6 +171,8 @@ def _open_source(source, head, etag=None, last_modified=None):
 
 def fetch(url, etag=None, last_modified=None, head = False):
     """Fetch a URL and return the contents"""
+    socket.setdefaulttimeout(settings.fetcher.timeout) 
+
     result = {}
     f = _open_source(url, head, etag, last_modified)
     result['data'] = f.read()
@@ -185,4 +186,5 @@ def fetch(url, etag=None, last_modified=None, head = False):
     if hasattr(f, 'status'):
         result['status'] = f.status
     f.close()
+    socket.setdefaulttimeout(None) 
     return result
