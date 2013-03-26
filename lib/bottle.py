@@ -58,9 +58,9 @@ except ImportError: # pragma: no cover
 # It ain't pretty but it works... Sorry for the mess.
 
 py   = sys.version_info
-py3k = py >= (3,0,0)
-py25 = py <  (2,6,0)
-py31 = (3,1,0) <= py < (3,2,0)
+py3k = py >= (3, 0, 0)
+py25 = py <  (2, 6, 0)
+py31 = (3, 1, 0) <= py < (3, 2, 0)
 
 # Workaround for the missing "as" keyword in py3k.
 def _e(): return sys.exc_info()[1]
@@ -135,7 +135,7 @@ def update_wrapper(wrapper, wrapped, *a, **ka):
 # These helpers are used at module level and need to be defined first.
 # And yes, I know PEP-8, but sometimes a lower-case classname makes more sense.
 
-def depr(message):
+def depr(message, hard=False):
     warnings.warn(message, DeprecationWarning, stacklevel=3)
 
 def makelist(data): # This is just to handy
@@ -238,6 +238,45 @@ class RouteBuildError(RouteError):
     """ The route could not been built """
 
 
+class RouteRuleParser(object):
+
+    #: Sorry for the mess. It works. Trust me.
+    rule_syntax = re.compile('(\\\\*)'\
+        '(?:(?::([a-zA-Z_][a-zA-Z_0-9]*)?()(?:#(.*?)#)?)'\
+          '|(?:<([a-zA-Z_][a-zA-Z_0-9]*)?(?::([a-zA-Z_]*)'\
+            '(?::((?:\\\\.|[^\\\\>]+)+)?)?)?>))')
+
+    def __init__(self):
+        self.cache = {}
+
+    def tokenize(self, rule):
+        ''' Parses a rule into a (name, filter, conf) token stream. If filter is
+            None, name contains a static rule part. '''
+        if rule not in self.cache:
+            self.cache[rule] = list(self._itertokens(rule))
+        return self.cache[rule]
+
+    def _itertokens(self, rule):
+        offset, prefix = 0, ''
+        for match in self.rule_syntax.finditer(rule):
+            prefix += rule[offset:match.start()]
+            g = match.groups()
+            if len(g[0])%2: # Escaped wildcard
+                prefix += match.group(0)[len(g[0]):]
+                offset = match.end()
+                continue
+            if prefix:
+                yield prefix, None, None
+            name, filtr, conf = g[4:7] if g[2] is None else g[1:4]
+            yield name, filtr or 'default', conf or None
+            offset, prefix = match.end(), ''
+        if offset <= len(rule) or prefix:
+            yield prefix+rule[offset:], None, None
+
+    def normalize(self, rule):
+        ''' Removes the names from wildcards '''
+    
+
 class Router(object):
     ''' A Router is an ordered collection of route->target pairs. It is used to
         efficiently match WSGI requests against a number of routes and return
@@ -251,12 +290,8 @@ class Router(object):
     '''
 
     default_pattern = '[^/]+'
-    default_filter   = 're'
-    #: Sorry for the mess. It works. Trust me.
-    rule_syntax = re.compile('(\\\\*)'\
-        '(?:(?::([a-zA-Z_][a-zA-Z_0-9]*)?()(?:#(.*?)#)?)'\
-          '|(?:<([a-zA-Z_][a-zA-Z_0-9]*)?(?::([a-zA-Z_]*)'\
-            '(?::((?:\\\\.|[^\\\\>]+)+)?)?)?>))')
+    default_filter  = 're'
+    default_parser  = RouteRuleParser
 
     def __init__(self, strict=False):
         self.rules    = {} # A {rule: Rule} mapping
@@ -267,6 +302,7 @@ class Router(object):
         self.strict_order = strict
         self.filters = {'re': self.re_filter, 'int': self.int_filter,
                         'float': self.float_filter, 'path': self.path_filter}
+        self.parser = self.default_parser()
 
     def re_filter(self, conf):
         return conf or self.default_pattern, None, None
@@ -286,25 +322,6 @@ class Router(object):
         The first element is a string, the last two are callables or None. '''
         self.filters[name] = func
 
-    def parse_rule(self, rule):
-        ''' Parses a rule into a (name, filter, conf) token stream. If mode is
-            None, name contains a static rule part. '''
-        offset, prefix = 0, ''
-        for match in self.rule_syntax.finditer(rule):
-            prefix += rule[offset:match.start()]
-            g = match.groups()
-            if len(g[0])%2: # Escaped wildcard
-                prefix += match.group(0)[len(g[0]):]
-                offset = match.end()
-                continue
-            if prefix: yield prefix, None, None
-            name, filtr, conf = g[1:4] if not g[2] is None else g[4:7]
-            if not filtr: filtr = self.default_filter
-            yield name, filtr, conf or None
-            offset, prefix = match.end(), ''
-        if offset <= len(rule) or prefix:
-            yield prefix+rule[offset:], None, None
-
     def add(self, rule, method, target, name=None):
         ''' Add a new route or replace the target for an existing route. '''
         if rule in self.rules:
@@ -320,9 +337,10 @@ class Router(object):
         filters = []   # Lists of wildcard input filters
         builder = []   # Data structure for the URL builder
         is_static = True
-        for key, mode, conf in self.parse_rule(rule):
+        for key, mode, conf in self.parser.tokenize(rule):
             if mode:
                 is_static = False
+                if mode == 'default': mode = self.default_filter
                 mask, in_filter, out_filter = self.filters[mode](conf)
                 if key:
                     pattern += '(?P<%s>%s)' % (key, mask)
@@ -549,8 +567,7 @@ class Bottle(object):
             All other parameters are passed to the underlying :meth:`route` call.
         '''
         if isinstance(app, basestring):
-            prefix, app = app, prefix
-            depr('Parameter order of Bottle.mount() changed.') # 0.10
+            depr('Parameter order of Bottle.mount() changed.', True) # 0.10
 
         segments = [p for p in prefix.split('/') if p]
         if not segments: raise ValueError('Empty path prefix.')
@@ -1691,9 +1708,6 @@ class TemplatePlugin(object):
         conf = route.config.get('template')
         if isinstance(conf, (tuple, list)) and len(conf) == 2:
             return view(conf[0], **conf[1])(callback)
-        elif isinstance(conf, str) and 'template_opts' in route.config:
-            depr('The `template_opts` parameter is deprecated.') #0.9
-            return view(conf, **route.config['template_opts'])(callback)
         elif isinstance(conf, str):
             return view(conf)(callback)
         else:
@@ -2258,6 +2272,7 @@ def debug(mode=True):
     """ Change the debug level.
     There is only one debug level supported at the moment."""
     global DEBUG
+    if mode: warnings.simplefilter('default')
     DEBUG = bool(mode)
 
 
@@ -2399,27 +2414,6 @@ def path_shift(script_name, path_info, shift=1):
     new_path_info = '/' + '/'.join(pathlist)
     if path_info.endswith('/') and pathlist: new_path_info += '/'
     return new_script_name, new_path_info
-
-
-def validate(**vkargs):
-    """
-    Validates and manipulates keyword arguments by user defined callables.
-    Handles ValueError and missing arguments by raising HTTPError(403).
-    """
-    depr('Use route wildcard filters instead.')
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kargs):
-            for key, value in vkargs.items():
-                if key not in kargs:
-                    abort(403, 'Missing parameter: %s' % key)
-                try:
-                    kargs[key] = value(kargs[key])
-                except ValueError:
-                    abort(403, 'Wrong parameter format for: %s' % key)
-            return func(*args, **kargs)
-        return wrapper
-    return decorator
 
 
 def auth_basic(check, realm="private", text="Access denied"):
@@ -3041,31 +3035,6 @@ class Jinja2Template(BaseTemplate):
             return f.read().decode(self.encoding)
 
 
-class SimpleTALTemplate(BaseTemplate):
-    ''' Deprecated, do not use. '''
-    def prepare(self, **options):
-        depr('The SimpleTAL template handler is deprecated'\
-             ' and will be removed in 0.12')
-        from simpletal import simpleTAL
-        if self.source:
-            self.tpl = simpleTAL.compileHTMLTemplate(self.source)
-        else:
-            with open(self.filename, 'rb') as fp:
-                self.tpl = simpleTAL.compileHTMLTemplate(tonat(fp.read()))
-
-    def render(self, *args, **kwargs):
-        from simpletal import simpleTALES
-        for dictarg in args: kwargs.update(dictarg)
-        context = simpleTALES.Context()
-        for k,v in self.defaults.items():
-            context.addGlobal(k, v)
-        for k,v in kwargs.items():
-            context.addGlobal(k, v)
-        output = StringIO()
-        self.tpl.expand(context, output)
-        return output.getvalue()
-
-
 class SimpleTemplate(BaseTemplate):
     blocks = ('if', 'elif', 'else', 'try', 'except', 'finally', 'for', 'while',
               'with', 'def', 'class')
@@ -3111,7 +3080,10 @@ class SimpleTemplate(BaseTemplate):
         ptrbuffer = [] # Buffer for printable strings and token tuple instances
         codebuffer = [] # Buffer for generated python code
         multiline = dedent = oneline = False
-        template = self.source or open(self.filename, 'rb').read()
+        template = self.source
+        if not template:
+            with open(self.filename, 'rb') as fp:
+                template = fp.read()
 
         def yield_tokens(line):
             for i, part in enumerate(re.split(r'\{\{(.*?)\}\}', line)):
@@ -3247,7 +3219,6 @@ def template(*args, **kwargs):
 mako_template = functools.partial(template, template_adapter=MakoTemplate)
 cheetah_template = functools.partial(template, template_adapter=CheetahTemplate)
 jinja2_template = functools.partial(template, template_adapter=Jinja2Template)
-simpletal_template = functools.partial(template, template_adapter=SimpleTALTemplate)
 
 
 def view(tpl_name, **defaults):
@@ -3277,7 +3248,6 @@ def view(tpl_name, **defaults):
 mako_view = functools.partial(view, template_adapter=MakoTemplate)
 cheetah_view = functools.partial(view, template_adapter=CheetahTemplate)
 jinja2_view = functools.partial(view, template_adapter=Jinja2Template)
-simpletal_view = functools.partial(view, template_adapter=SimpleTALTemplate)
 
 
 
