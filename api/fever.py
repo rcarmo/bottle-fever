@@ -5,9 +5,9 @@ log = logging.getLogger()
 from bottle import post, request, response, abort
 import time
 
-from controllers.shim import ShimController
+from controllers.feeds import FeedController
 
-c = ShimController()
+fc = FeedController()
 
 @post('/fever/')
 def endpoint():
