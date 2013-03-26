@@ -14,6 +14,7 @@ import socket, hashlib, urllib, urllib2, urlparse
 log = logging.getLogger()
 
 from models import Feed, Group, Item, Filter, Link, Reference, Favicon, db
+from peewee import fn
 from config import settings
 from decorators import cached_method
 from utils.timekit import http_time
@@ -128,9 +129,23 @@ def expand_links(feed, links):
 
 class FeedController:
 
-    def get_feeds(self):
-        """Return all feeds"""
-        result = [f for f in Feed.select()]
+    def get_feeds_with_counts(self, enabled = True):
+        """Return feeds - defaults to returning enabled feeds only"""
+        result = [f for f in Feed.select(
+                Feed.enabled == True,
+                fn.Count(Item.id).alias('count')
+            ).join(Item).group_by(Feed)
+        ]
+        db.close()
+        return result
+
+        
+    def get_feeds(self, all = False):
+        """Return feeds - defaults to returning enabled feeds only"""
+        if all:
+            result = [f for f in Feed.select()]
+        else:
+            result = [f for f in Feed.select(Feed.enabled == True)]
         db.close()
         return result
         
@@ -156,15 +171,15 @@ class FeedController:
 
         now = time.time()
         
-        if feed.ttl:
-            if (now - feed.last_checked) < (feed.ttl * 60):
-                log.info("%s - throttled (TTL)" % netloc)
-                return
+        if feed.last_checked:
+            if feed.ttl:
+                if (now - feed.last_checked) < (feed.ttl * 60):
+                    log.info("%s - throttled (TTL)" % netloc)
+                    return
                 
-        if (now - feed.last_checked) < settings.fetcher.min_interval:
-            log.info("%s - throttled (interval)" % netloc)
-            return
-        
+            if (now - feed.last_checked) < settings.fetcher.min_interval:
+                log.info("%s - throttled (interval)" % netloc)
+                return
     
         if feed.last_modified:
             if (now - feed.last_modified) < settings.fetcher.min_interval:
@@ -179,11 +194,14 @@ class FeedController:
         except Exception, e:
             log.error("Could not fetch %s: %s" % (feed.url, e))
             socket.setdefaulttimeout(None) 
+            feed.last_checked = now
+            feed.save()
+            db.close()
             return
             
+        feed.last_checked = now
         socket.setdefaulttimeout(None) 
 
-        feed.last_checked = now
         
         status    = res.get('status', 200)
         headers   = res.get('headers', {})

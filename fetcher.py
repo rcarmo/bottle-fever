@@ -29,7 +29,7 @@ if __name__ == "__main__":
     log.info("Starting fetcher.")
     start = time.time()
     fc = controllers.FeedController()
-    feeds = fc.get_feeds()
+    feeds = fc.get_feeds(all=True)
     if config.settings.fetcher.pool:
         if config.settings.fetcher.engine == 'multiprocessing':
             from multiprocessing import Pool
