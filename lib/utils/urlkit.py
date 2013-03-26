@@ -114,7 +114,11 @@ def scrub_query(url):
         else:
             result.append(field)
             seen.add(name)
-    return '?'.join([base, sep.join(result)]) if result else base
+    result = '?'.join([base, sep.join(result)]) if result else base
+    # strip dangling '?'
+    if result[-1:] == '?':
+        result = result[:-1]
+    return result
 
 
 def data_uri(content_type, data):
