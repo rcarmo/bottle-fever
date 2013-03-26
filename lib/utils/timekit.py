@@ -7,7 +7,7 @@ Description: Utility functions for handling date and time information
 License: MIT (see LICENSE.md for details)
 """
 
-import os, sys, time, re, logging
+import os, sys, time, math, re, logging
 from markup.feedparser import _parse_date
 import gettext
 gettext.textdomain('date')
@@ -121,7 +121,7 @@ def relative_time(value=None, addtime=False):
     # we have a different year
 
         format = ' %Y' + format
-    format = i18n[time.strftime('%b', time.localtime(value))] + ' %d' \
+    format = time.strftime('%b', time.localtime(value)) + ' %d' \
         + format
     return time.strftime(format, time.localtime(value)).strip()
 
