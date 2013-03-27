@@ -38,7 +38,7 @@ print(zest.zest('div'))
 %        if field in ['url','site_url']:
 %            value = '<a href="%s">%s</a>' % (value, shrink(value,40))
 %        elif field in ['title']:
-%            value = shrink(value,30)
+%            value = '<a href="/feed/%d">%s</a>' % (f['id'],shrink(value,30))
 %        end
 %        if field in ['last_modified','last_checked']:
 %            if value:

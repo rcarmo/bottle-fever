@@ -19,6 +19,7 @@ fc = FeedController()
 
 
 @route('/feed/<id:int>')
+@view('feeds/items')
 def item_list(id):
     """Render all items from a given feed"""
     try:
