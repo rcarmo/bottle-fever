@@ -17,13 +17,27 @@ from utils import tb
 
 fc = FeedController()
 
+
+@route('/feed/<id:int>')
+def item_list(id):
+    """Render all items from a given feed"""
+    try:
+        items = fc.get_items_from_feed(id)
+        log.debug(items[0])
+    except:
+        log.error(tb())
+        abort(500,"Error accessing items for feed")
+
+    return{'items':items, 'title': id}
+
+
 @route('/feeds')
 @view('feeds/index')
 def index():
     """Render a feed index"""
     try:
         feeds = fc.get_feeds_with_counts()
-        print feeds[0]
+        log.debug(feeds[0])
     except:
         log.error(tb())
         abort(500,"Error accessing feed data")
@@ -38,9 +52,4 @@ def index():
         {'label': 'Items',      'field': 'item_count'},
     ]
     return {'headers': headers, 'feeds': feeds, 'title': 'feeds'}
-
-@route('/<path:path>')
-def send_static(path):
-    """Static file handler"""
-    return static_file(path, root='static')
 
