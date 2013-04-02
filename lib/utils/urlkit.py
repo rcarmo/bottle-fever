@@ -183,6 +183,12 @@ def fetch(url, etag=None, last_modified=None, head = False):
         result.update({k.lower(): f.headers.get(k) for k in f.headers})
         if f.headers.get('content-encoding', '') == 'gzip':
             result['data'] = gzip.GzipFile(fileobj=StringIO(result['data'])).read()
+    if hasattr(f.headers, 'last-modified'):
+        try:
+            result['modified_parsed'] = datetime.strptime(f.headers['last-modified'], "%a, %d %b %Y %H:%M:%S %Z")
+        except Exception, e:
+            log.debug("Could not parse Last-Modified header '%s'" % f.headers['last-modified'])
+            pass
     if hasattr(f, 'url'):
         result['url'] = unicode(f.url)
         result['status'] = 200
