@@ -139,6 +139,15 @@ def expand_links(feed, links):
 
 class FeedController:
 
+
+    def get_items_from_feed(self, id):
+        """Return all items from a given feed"""
+
+        result = [i.fields() for i in Item.select().where(Item.feed == id)]
+        db.close()
+        return result
+
+
     def get_feeds_with_counts(self, enabled = True):
         """Return feeds - defaults to returning enabled feeds only"""
         

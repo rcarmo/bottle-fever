@@ -3,12 +3,21 @@
     <head>
         <meta charset="utf-8">
         <title>{{title}}</title>
-        <link rel="stylesheet" href="css/ink-min.css">
-        <link rel="stylesheet" href="css/main.css">
-        <script src="js/brython.js"></script>
+        <link rel="stylesheet" href="/css/ink-min.css">
+        <link rel="stylesheet" href="/css/main.css">
+<!--
+        <script type="text/javascript" src="/js/firebug-lite/build/firebug-lite.js">
+            {
+                overrideConsole: true,
+                startOpened: true,
+                enableTrace: true
+            }
+        </script>
+-->
+        <script src="/js/brython.js"></script>
 %if defined('scripts'):
     %for script in scripts:    
-        <script src="js/{{script}}"></script>
+        <script src="/js/{{script}}"></script>
     %end
 %end
     </head>
