@@ -18,10 +18,16 @@ from peewee import fn, JOIN_LEFT_OUTER
 from config import settings
 from decorators import cached_method
 from utils.timekit import http_time
-from utils.urlkit import expand
+from utils.urlkit import expand, fetch
 from utils import tb
 from bs4 import BeautifulSoup
 import markup.feedparser as feedparser
+try:
+    import markup.speedparser.speedparser as speedparser
+except ImportError, e: # speedparser or its dependencies are not available
+    log.error("Error importing speedparser: %s" % e)
+    pass
+
 
 feedparser.USER_AGENT = settings.fetcher.user_agent
 
@@ -32,10 +38,14 @@ def get_entry_content(entry):
     if 'summary_detail' in entry:
         candidates.append(entry.summary_detail)
     for c in candidates:
-        if 'html' in c.type: 
-            return c.value
+        if hasattr(c,'type'): # speedparser doesn't set this
+            if 'html' in c.type: 
+                return c.value
     if candidates:
-        return candidates[0].value
+        try:
+            return candidates[0].value
+        except AttributeError: # speedparser does this differently
+            return candidates[0]['value']
     return ''
     
     
@@ -162,10 +172,21 @@ class FeedController:
             f = Feed.create(url = url, title=title, site_url=site_url)
         db.close()
         return f
+
+
+    def after_fetch(self, feed, status = None, error = False):
+        if status:
+            feed.last_status = status
+        if error:
+            feed.error_count = feed.error_count + 1
+        if feed.error_count > settings.fetcher.error_threshold:
+            feed.enabled = False
+            log.warn("%s - disabling %s" % (netloc, feed.url))
+        feed.save()
+        db.close()
     
     
     def fetch_feed(self, feed):
-        socket.setdefaulttimeout(settings.fetcher.timeout) 
 
         if not feed.enabled:
             return
@@ -193,98 +214,103 @@ class FeedController:
             modified = None
         
         try:
-            res = feedparser.parse(feed.url, etag = feed.etag, modified = modified)
+            response = fetch(feed.url, etag = feed.etag, last_modified = modified)
+            log.debug("%s - %d, %d" % (feed.url, response['status'], len(response['data'])))
         except Exception, e:
             log.error("Could not fetch %s: %s" % (feed.url, e))
-            socket.setdefaulttimeout(None) 
-            feed.last_checked = now
-            feed.save()
-            db.close()
+            # TODO: store reason properly
+            # Network connect timeout error (Unknown)
+            self.after_fetch(feed, status = 599, error = True)
             return
             
         feed.last_checked = now
-        socket.setdefaulttimeout(None) 
+        status = response['status']
 
+        feed.last_status = status
+        if status == 304: # not modified
+            log.info("%s - not modified." % netloc)
+            self.after_fetch(feed, status = status)
+            return
+        elif status == 410: # gone
+            log.info("%s - gone, disabling %s" % (netloc, feed.url))
+            feed.enabled = False
+            self.after_fetch(feed, status = status)
+            return
+        elif status not in [200,301,302,307,308]:
+            log.warn("%s - %d, aborting" % (netloc,status))
+            self.after_fetch(feed, status = status, error = True)
+            return
+
+        if feed.error_count and feed.parsed_with == 1: # there were errors last time around, so let's try feedparser this time
+            try:
+                result = feedparser.parse(response['data'])
+                feed.parsed_with = 2
+            except Exception, e:
+                log.error("Could not parse %s with feedparser: %s" % (feed.url, e))
+                # Invalid response from upstream server
+                self.after_fetch(feed, status = 502, error = True)
+                return
+        else:
+            try:
+                result = speedparser.parse(response['data'])
+                feed.parsed_with = 1
+            except Exception, e:
+                log.error("Could not parse %s with speedparser: %s" % (feed.url, e))
+                try:
+                    result = feedparser.parse(response['data'])
+                    feed.parsed_with = 2
+                except Exception, e:
+                    log.error("Could not parse %s with feedparser: %s" % (feed.url, e))
+                    # Invalid response from upstream server
+                    self.after_fetch(feed, status = 502, error = True)
+                    return
         
-        status    = res.get('status', 503)
-        headers   = res.get('headers', {})
-        exception = res.get("bozo_exception", Exception()).__class__
+        status    = response.get('status', 503)
+        headers   = response.get('headers', {})
+        exception = result.get("bozo_exception", Exception()).__class__
 
         if exception != Exception:
             try:
-                msg = "%s@%d" % (res.get("bozo_exception", "Unhandled"), res.bozo_exception.getMessage(),res.bozo_exception.getLineNumber())
+                msg = "%s@%d" % (result.get("bozo_exception", "Unhandled"), result.bozo_exception.getMessage(),result.bozo_exception.getLineNumber())
             except:
                 msg = ""
                 pass
             # Map exceptions to warning messages
             message, leave = {
-                socket.timeout                       : ("timed out", True),
-                socket.error                         : (res.bozo_exception.args, True),
-                socket.gaierror                      : (res.bozo_exception.args, True),
-                IOError                              : (res.bozo_exception, True),
+                IOError                              : (result.bozo_exception, True),
                 feedparser.zlib.error                : ("broken compression", False),
-                urllib2.URLError                     : (res.bozo_exception.args, True),
-                AttributeError                       : (res.bozo_exception, True)
+                AttributeError                       : (result.bozo_exception, True)
             }.get(exception,(msg,False))
             if message:
                 log.warn("%s: %s" % (netloc, message))
             if leave: 
-                feed.last_status = 599 # Network connect timeout error (Unknown)
-                feed.error_count = feed.error_count + 1
-                if feed.error_count > settings.fetcher.error_threshold:
-                    feed.enabled = False
-                    log.warn("%s - disabling %s" % (netloc, feed.url))
-                feed.save()
-                db.close()
+                self.after_fetch(feed, status = status, error = True)
                 return
         
-        if status == 304: # not modified
-            log.info("%s - not modified." % netloc)
-            feed.last_status = status
-            feed.save()
-            db.close()
-            return
-        elif status == 410: # gone
-            log.info("%s - gone, disabling %s" % (netloc, feed.url))
-            feed.enabled = False
-            feed.last_status = status
-            feed.save()
-            db.close()
-            return
-        elif status not in [200,301,302,307,308]:
-            log.warn("%s - %d, aborting" % (netloc,status))
-            feed.last_status = status
-            feed.error_count = feed.error_count + 1
-            if feed.error_count > settings.fetcher.error_threshold:
-                feed.enabled = False
-                log.warn("%s - disabling %s" % (netloc, feed.url))
-            feed.save()
-            db.close()
-            return
         
         if 'content-type' in headers and 'xml' not in headers['content-type']:
             log.warn("%s - content-type %s, proceeding" % (netloc, headers['content-type']))
         
-        ttl = res.feed.get('ttl',None)
-        etag = res.feed.get('etag',None)
-        last_modified = res.feed.get('modified_parsed',None)
+        ttl = result.feed.get('ttl',None)
+        etag = response.get('etag',None)
+        last_modified = response.get('modified_parsed',None)
+        last_modified = result.feed.get('modified_parsed',None)
         
         if status in [301,308]:
-            feed.url = res.href
+            feed.url = response['url']
         feed.ttl = ttl
         feed.etag = etag
         feed.last_modified = time.mktime(last_modified) if last_modified else None
-        feed.last_status = status
         feed.error_count = 0
-        feed.save()
-        db.close()
+        self.after_fetch(feed, status = status)
+        feed.last_status = status
 
-        res.entries.reverse()
+        result.entries.reverse()
         
         entries = []
         
         now = time.time()
-        for entry in res.entries:
+        for entry in result.entries:
             when = get_entry_timestamp(entry)
             # skip ancient feed items
             if (now - when) < settings.fetcher.max_history:
@@ -303,6 +329,7 @@ class FeedController:
                 pass
 
             content = get_entry_content(entry)
+
             if len(content):
                 hrefs = get_link_references(content)
             else:
@@ -319,7 +346,7 @@ class FeedController:
             entries.append({'guid'   : guid,
                             'feed'   : feed,
                             'title'  : get_entry_title(entry),
-                            'author' : get_entry_author(entry,res.feed),
+                            'author' : get_entry_author(entry,result.feed),
                             'html'   : content,
                             'url'    : url,
                             'tags'   : get_entry_tags(entry),
@@ -330,8 +357,8 @@ class FeedController:
         now = time.time()
         
         records = 0
-        db.connect()
         for entry in entries:
+            db.close()
             try:
                 item = Item.get(guid = entry['guid'])
             except Item.DoesNotExist:

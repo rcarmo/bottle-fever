@@ -17,8 +17,13 @@
         "max_history": 604800,
         "error_threshold": 200,
         "parser": "lxml",
-        "engine": "gevent",
-        "pool": 32
+        "engine": "mixed",
+        "pool": 8
+    },
+    "speedparser": {
+        "__comment": "defaults to not cleaning up HTML or encoding",
+        "clean_html": false,
+        "encoding": false
     },
     "logging": {
         "version": 1,
@@ -44,7 +49,7 @@
         },
         "loggers": {
             "peewee": {
-                "level"   : "ERROR",
+                "level"   : "WARN",
                 "handlers": ["ram","console"]
             }
         },

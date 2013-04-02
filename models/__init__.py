@@ -80,6 +80,7 @@ class Feed(CustomModel):
     last_checked         = IntegerField(default=0) # epoch
     last_status          = IntegerField(null=True) # last HTTP code
     error_count          = IntegerField(default=0)
+    parsed_with          = IntegerField(default=0) # 1 for speedparser, 2 for feedparser
 
     class Meta:
         indexes = (
