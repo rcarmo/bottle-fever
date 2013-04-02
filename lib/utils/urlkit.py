@@ -175,7 +175,6 @@ def _open_source(source, head, etag=None, last_modified=None):
 
 def fetch(url, etag=None, last_modified=None, head = False):
     """Fetch a URL and return the contents"""
-    socket.setdefaulttimeout(settings.fetcher.timeout) 
 
     result = {}
     f = _open_source(url, head, etag, last_modified)
@@ -190,5 +189,4 @@ def fetch(url, etag=None, last_modified=None, head = False):
     if hasattr(f, 'status'):
         result['status'] = f.status
     f.close()
-    socket.setdefaulttimeout(None) 
     return result
