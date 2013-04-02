@@ -182,7 +182,7 @@ def fetch(url, etag=None, last_modified=None, head = False):
     if hasattr(f, 'headers'):
         result.update({k.lower(): f.headers.get(k) for k in f.headers})
         if f.headers.get('content-encoding', '') == 'gzip':
-          result['data'] = gzip.GzipFile(fileobj=StringIO(result['data'])).read()
+            result['data'] = gzip.GzipFile(fileobj=StringIO(result['data'])).read()
     if hasattr(f, 'url'):
         result['url'] = unicode(f.url)
         result['status'] = 200
