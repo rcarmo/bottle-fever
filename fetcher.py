@@ -58,7 +58,7 @@ if __name__ == "__main__":
             from gevent.pool import Pool
             p = Pool(config.settings.fetcher.pool)
             log.info(">> starting %d greenlets" % config.settings.fetcher.pool)
-            p.map(controllers.feed_worker, feeds)
+            run = [g for g in p.imap_unordered(controllers.feed_worker, feeds)]
         # multiple processes with greenlets (FFA mode)
         elif config.settings.fetcher.engine == 'mixed':
             from multiprocessing import Pool

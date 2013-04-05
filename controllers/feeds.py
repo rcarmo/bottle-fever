@@ -310,16 +310,17 @@ class FeedController:
         feed.ttl = ttl
         feed.etag = etag
         feed.last_modified = time.mktime(last_modified) if last_modified else None
-        feed.error_count = 0
         self.after_fetch(feed, status = status)
         feed.last_status = status
 
         result.entries.reverse()
+        log.debug("%s - %d entries parsed" % (netloc,len(result.entries)))
         
         entries = []
         
         now = time.time()
         for entry in result.entries:
+            db.close()
             when = get_entry_timestamp(entry)
             # skip ancient feed items
             if (now - when) < settings.fetcher.max_history:
@@ -330,11 +331,8 @@ class FeedController:
                 item = Item.get(guid = guid)
                 # if item is already in database with same timestamp, then skip it
                 # TODO: handle item content updates - potentially very expensive, we'll see later on
-                if when == item.when:
-                    db.close()
-                    continue
+                continue
             except Item.DoesNotExist:
-                db.close()
                 pass
 
             content = get_entry_content(entry)
