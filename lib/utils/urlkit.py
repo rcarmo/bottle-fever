@@ -60,8 +60,7 @@ def agnostic_shortener(url):
     return url
 
 
-@memoize
-def expand(url, remove_junk = True):
+def expand(url, remove_junk = True, timeout = None):
     """Resolve short URLs"""
     url = unicode(url)
     result = url
@@ -78,7 +77,7 @@ def expand(url, remove_junk = True):
         
     res = {}
     try:
-        res = fetch(url, head = True)
+        res = fetch(url, head = True, timeout=timeout)
     except: 
         #log.debug(u"%s: %s" % (tb(),url))
         pass
@@ -147,7 +146,7 @@ class DefaultErrorHandler(HTTPDefaultErrorHandler):
         return result
 
 
-def _open_source(source, head, etag=None, last_modified=None):
+def _open_source(source, head, etag=None, last_modified=None, timeout=None):
     """Open anything"""
     if hasattr(source, 'read'):
         return source
@@ -165,7 +164,7 @@ def _open_source(source, head, etag=None, last_modified=None):
             request.add_header('If-Modified-Since', last_modified)
         request.add_header('Accept-encoding', 'gzip')
         opener = urllib2.build_opener(SmartRedirectHandler(), DefaultErrorHandler())
-        return opener.open(request, None, settings.fetcher.timeout)
+        return opener.open(request, None, timeout)
     try:
         return open(source)
     except(IOError,OSError):
@@ -173,11 +172,11 @@ def _open_source(source, head, etag=None, last_modified=None):
     return StringIO(str(source))
 
 
-def fetch(url, etag=None, last_modified=None, head = False):
+def fetch(url, etag=None, last_modified=None, head = False, timeout = None):
     """Fetch a URL and return the contents"""
 
     result = {}
-    f = _open_source(url, head, etag, last_modified)
+    f = _open_source(url, head, etag, last_modified, timeout)
     result['data'] = f.read()
     if hasattr(f, 'headers'):
         result.update({k.lower(): f.headers.get(k) for k in f.headers})

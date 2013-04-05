@@ -128,7 +128,7 @@ def expand_links(feed, links):
                 result[l] = link.expanded_url
                 db.close()
             except Link.DoesNotExist:
-                expanded_url = expand(l)
+                expanded_url = expand(l, timeout = settings.fetcher.link_timeout)
                 Link.create(url = l, expanded_url = expanded_url, when = time.time())
                 db.close()
                 result[l] = expanded_url
@@ -223,7 +223,7 @@ class FeedController:
             modified = None
         
         try:
-            response = fetch(feed.url, etag = feed.etag, last_modified = modified)
+            response = fetch(feed.url, etag = feed.etag, last_modified = modified, timeout=settings.fetcher.fetch_timeout)
             log.debug("%s - %d, %d" % (feed.url, response['status'], len(response['data'])))
         except Exception, e:
             log.error("Could not fetch %s: %s" % (feed.url, e))
