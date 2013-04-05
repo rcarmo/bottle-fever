@@ -160,5 +160,7 @@ def setup(skip_if_existing = True):
         User.create(username='default',api_key='default')
     except:
         pass
+    # set Write Ahead Log mode for SQLite
+    db.execute_sql('PRAGMA journal_mode=WAL')
     db.close()
 
