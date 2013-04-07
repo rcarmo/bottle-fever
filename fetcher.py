@@ -36,8 +36,8 @@ def grouper(n, iterable):
 def chunk_wrapper(feeds):
      from gevent import monkey; monkey.patch_all()
      from gevent.pool import Pool
-     p = Pool(config.settings.fetcher.pool)
-     log.info(">> starting %d greenlets" % config.settings.fetcher.pool)
+     p = Pool(config.settings.fetcher.mix_pool)
+     log.info(">> starting %d greenlets" % config.settings.fetcher.mix_pool)
      p.map(controllers.feed_worker, feeds)
 
 if __name__ == "__main__":
@@ -51,7 +51,7 @@ if __name__ == "__main__":
             from multiprocessing import Pool
             p = Pool(processes=config.settings.fetcher.pool)
             log.info(">> starting %d workers" % config.settings.fetcher.pool)
-            p.map(controllers.feed_worker, feeds, len(feeds)/config.settings.fetcher.pool)
+            p.map(controllers.feed_worker, feeds, config.settings.fetcher.chunk_size)
         # multiple greenlets
         elif config.settings.fetcher.engine == 'gevent':
             from gevent import monkey; monkey.patch_all()
@@ -64,7 +64,7 @@ if __name__ == "__main__":
             from multiprocessing import Pool
             p = Pool(processes=config.settings.fetcher.pool)
             log.info(">> starting %d workers" % config.settings.fetcher.pool)
-            p.map(chunk_wrapper, grouper(config.settings.fetcher.pool,feeds))
+            p.map(chunk_wrapper, grouper(config.settings.fetcher.chunk_size,feeds))
     else:
         for f in feeds:
             controllers.feed_worker(f)

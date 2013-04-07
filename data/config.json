@@ -14,12 +14,18 @@
         "fetch_timeout": 10,
         "link_timeout": 2,
         "debug_level": 0,
-        "min_interval": 90,
+        "min_interval": 900,
         "max_history": 604800,
         "error_threshold": 200,
         "parser": "lxml",
-        "engine": "multiprocessing",
-        "pool": 2
+        "#": "chunk size for processing queue",
+        "chunk_size": 32,
+        "#": "multiprocessing, gevent or mixed",
+        "engine": "mixed",
+        "#": "number of processes",
+        "pool": 8,
+        "#": "number of greenlets launched per pool item",
+        "mix_pool": 16
     },
     "speedparser": {
         "__comment": "defaults to not cleaning up HTML or encoding",
