@@ -129,7 +129,10 @@ def expand_links(feed, links):
                 db.close()
             except Link.DoesNotExist:
                 expanded_url = expand(l, timeout = settings.fetcher.link_timeout)
-                Link.create(url = l, expanded_url = expanded_url, when = time.time())
+                try:
+                    Link.create(url = l, expanded_url = expanded_url, when = time.time())
+                except:
+                    log.error(tb())
                 db.close()
                 result[l] = expanded_url
         else:
@@ -381,6 +384,7 @@ class FeedController:
                 try:
                     link = Link.get(url = url)
                 except Link.DoesNotExist:
+                    log.debug("Found missing link %s" % url)
                     try:
                         link = Link.get(expanded_url = url)
                     except Link.DoesNotExist:

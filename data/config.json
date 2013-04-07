@@ -21,11 +21,11 @@
         "#": "chunk size for processing queue",
         "chunk_size": 32,
         "#": "multiprocessing, gevent or mixed",
-        "engine": "mixed",
+        "engine": "gevent",
         "#": "number of processes",
         "pool": 8,
         "#": "number of greenlets launched per pool item",
-        "mix_pool": 16
+        "mix_pool": 2
     },
     "speedparser": {
         "__comment": "defaults to not cleaning up HTML or encoding",
