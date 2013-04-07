@@ -381,26 +381,27 @@ class FeedController:
             records += 1
                 
             for url in entry['hrefs']:
-                try:
-                    link = Link.get(url = url)
-                except Link.DoesNotExist:
-                    log.debug("Found missing link %s" % url)
+                (schema, netloc, path, params, query, fragment) = urlparse.urlparse(l)
+                if netloc and schema in ['http','https']:
                     try:
-                        link = Link.get(expanded_url = url)
+                        link = Link.get(url = url)
                     except Link.DoesNotExist:
-                        expanded_url = expand(url)
                         try:
-                            link = Link.create(url = url, expanded_url = expanded_url, when=time.time())
-                            records += 1
-                        except:
-                            log.error(tb())
-                try:
-                    reference = Reference.get(item = item, link = link)
-                except Reference.DoesNotExist:
-                    reference = Reference.create(item = item, link = link)
-                    records += 1
-                except:
-                    log.error(tb())
+                            link = Link.get(expanded_url = url)
+                        except Link.DoesNotExist:
+                            expanded_url = expand(url)
+                            try:
+                                link = Link.create(url = url, expanded_url = expanded_url, when=time.time())
+                                records += 1
+                            except:
+                                log.error(tb())
+                    try:
+                        reference = Reference.get(item = item, link = link)
+                    except Reference.DoesNotExist:
+                        reference = Reference.create(item = item, link = link)
+                        records += 1
+                    except:
+                        log.error(tb())
 
         db.close()
         log.debug("%s - %d records in %fs" % (netloc, records,time.time()-now))
