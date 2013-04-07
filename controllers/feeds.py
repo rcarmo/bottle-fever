@@ -381,7 +381,7 @@ class FeedController:
             records += 1
                 
             for url in entry['hrefs']:
-                (schema, netloc, path, params, query, fragment) = urlparse.urlparse(l)
+                (schema, netloc, path, params, query, fragment) = urlparse.urlparse(url)
                 if netloc and schema in ['http','https']:
                     try:
                         link = Link.get(url = url)
