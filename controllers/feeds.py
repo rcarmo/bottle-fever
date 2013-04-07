@@ -179,6 +179,8 @@ class FeedController:
             f = Feed.get(Feed.url == url)
         except Feed.DoesNotExist:
             f = Feed.create(url = url, title=title, site_url=site_url)
+        except:
+            log.error(tb())
         db.close()
         return f
 
@@ -334,6 +336,9 @@ class FeedController:
                 continue
             except Item.DoesNotExist:
                 pass
+            except Exception, e:
+                log.error(tb())
+
 
             content = get_entry_content(entry)
 
@@ -380,13 +385,18 @@ class FeedController:
                         link = Link.get(expanded_url = url)
                     except Link.DoesNotExist:
                         expanded_url = expand(url)
-                        link = Link.create(url = url, expanded_url = expanded_url, when=time.time())
-                        records += 1
+                        try:
+                            link = Link.create(url = url, expanded_url = expanded_url, when=time.time())
+                            records += 1
+                        except:
+                            log.error(tb())
                 try:
                     reference = Reference.get(item = item, link = link)
                 except Reference.DoesNotExist:
                     reference = Reference.create(item = item, link = link)
                     records += 1
+                except:
+                    log.error(tb())
 
         db.close()
         log.debug("%s - %d records in %fs" % (netloc, records,time.time()-now))
