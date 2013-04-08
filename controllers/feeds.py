@@ -128,6 +128,7 @@ def expand_links(links):
     """Try to expand a link without locking the database"""
     result = {}
     for l in links:
+        db.close()
         (schema, netloc, path, params, query, fragment) = urlparse.urlparse(l)
         if netloc and schema in ['http','https']:
             try:
@@ -398,6 +399,7 @@ class FeedController:
                     log.error(tb())
 
         log.debug("%s - %d records in %fs" % (netloc, records,time.time()-now))
+        db.close()
 
         # TODO: favicons, download linked content, extract keywords, the works.
         

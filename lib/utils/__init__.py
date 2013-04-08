@@ -39,6 +39,10 @@ class Struct(dict):
             return self.__dict__[attr]
         except KeyError:
             raise AttributeError(attr)
+            
+    def __setitem__(self, key, value):
+        super(Struct, self).__setitem__(key, value)
+        self.__dict__[key] = value
 
     def __setattr__(self, attr, value):
         self.__setitem__(attr, value)
