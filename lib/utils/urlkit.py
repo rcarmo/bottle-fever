@@ -15,14 +15,14 @@ import re, time, gzip, base64
 import socket, urllib, urllib2, httplib, urlparse
 from StringIO import StringIO
 from xml.dom.minidom import parseString
-from urllib2 import HTTPRedirectHandler, HTTPDefaultErrorHandler, HTTPError
-
+from urllib2 import HTTPCookieProcessor, HTTPRedirectHandler, HTTPDefaultErrorHandler, HTTPError
+import cookielib
 from utils import tb
 from config import settings
 from decorators import memoize
 
 # Initialize debug level upon module load
-httplib.HTTPConnection.debuglevel = settings.fetcher.debug_level
+httplib.HTTPConnection.debuglevel = settings.httplib.debuglevel
 
 @memoize
 def shorten(url):
@@ -72,7 +72,8 @@ def expand(url, remove_junk = True, timeout = None):
     if scheme not in ['http','https']:
         return result
     
-    if netloc in ['plus.google.com','twitter.com','ads.pheedo.com']:
+    # time sinks that aren't worth expanding further
+    if netloc in ['plus.google.com','twitter.com','ads.pheedo.com','www.facebook.com','vimeo.com']:
         return result
         
     res = {}
@@ -127,15 +128,13 @@ def data_uri(content_type, data):
    
 class SmartRedirectHandler(HTTPRedirectHandler):
 
-    def http_error_301(self, req, fp, code, msg, headers):
-        result = HTTPRedirectHandler.http_error_301(self, req, fp, code, msg, headers)
-        result.status = code
-        return result 
-
     def http_error_302(self, req, fp, code, msg, headers):
         result = HTTPRedirectHandler.http_error_302(self, req, fp, code, msg, headers)
         result.status = code
+        #log.debug("%d %s" % (code, req.get_full_url()))
         return result 
+
+    http_error_301 = http_error_303 = http_error_307 = http_error_302
 
 
 class DefaultErrorHandler(HTTPDefaultErrorHandler):
@@ -163,7 +162,9 @@ def _open_source(source, head, etag=None, last_modified=None, timeout=None):
         if last_modified:
             request.add_header('If-Modified-Since', last_modified)
         request.add_header('Accept-encoding', 'gzip')
-        opener = urllib2.build_opener(SmartRedirectHandler(), DefaultErrorHandler())
+        jar = cookielib.MozillaCookieJar()                         
+        jar.set_policy(cookielib.DefaultCookiePolicy(rfc2965=True, strict_rfc2965_unverifiable=False))
+        opener = urllib2.build_opener(SmartRedirectHandler(), HTTPCookieProcessor(jar), DefaultErrorHandler())
         return opener.open(request, None, timeout)
     try:
         return open(source)
@@ -177,7 +178,8 @@ def fetch(url, etag=None, last_modified=None, head = False, timeout = None):
 
     result = {}
     f = _open_source(url, head, etag, last_modified, timeout)
-    result['data'] = f.read()
+    if not head:
+        result['data'] = f.read()
     if hasattr(f, 'headers'):
         result.update({k.lower(): f.headers.get(k) for k in f.headers})
         if f.headers.get('content-encoding', '') == 'gzip':

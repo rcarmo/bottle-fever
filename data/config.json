@@ -12,25 +12,29 @@
     "fetcher": {
         "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_3) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1309.0 Safari/537.17",
         "fetch_timeout": 10,
-        "link_timeout": 2,
-        "debug_level": 0,
+        "link_timeout": 1,
         "min_interval": 900,
         "max_history": 604800,
-        "error_threshold": 200,
+        "#": "number of errors before we invalidate a feed", 
+        "error_threshold": 100,
+        "#": "HTML parser: html.parser, lxml or html5lib",
         "parser": "lxml",
         "#": "chunk size for processing queue",
         "chunk_size": 32,
         "#": "multiprocessing, gevent or mixed",
-        "engine": "gevent",
+        "engine": "mixed",
         "#": "number of processes",
         "pool": 8,
-        "#": "number of greenlets launched per pool item",
-        "mix_pool": 2
+        "#": "number of greenlets launched per pool worker",
+        "mix_pool": 8
     },
     "speedparser": {
-        "__comment": "defaults to not cleaning up HTML or encoding",
+        "#": "defaults to not cleaning up HTML or encoding",
         "clean_html": false,
         "encoding": false
+    },
+    "httplib": {
+        "debuglevel": 0
     },
     "logging": {
         "version": 1,
@@ -57,7 +61,7 @@
         "loggers": {
             "peewee": {
                 "level"   : "WARN",
-                "handlers": ["ram","console"]
+                "handlers": ["console"]
             }
         },
         "root": {

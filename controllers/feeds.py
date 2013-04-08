@@ -124,7 +124,7 @@ def get_link_references(content):
     return result
 
 
-def expand_links(feed, links):
+def expand_links(links):
     """Try to expand a link without locking the database"""
     result = {}
     for l in links:
@@ -133,14 +133,12 @@ def expand_links(feed, links):
             try:
                 link = Link.get(url = l)
                 result[l] = link.expanded_url
-                db.close()
             except Link.DoesNotExist:
                 expanded_url = expand(l, timeout = settings.fetcher.link_timeout)
                 try:
                     Link.create(url = l, expanded_url = expanded_url, when = time.time())
                 except:
                     log.error(tb())
-                db.close()
                 result[l] = expanded_url
         else:
             result[l] = l
@@ -154,7 +152,6 @@ class FeedController:
         """Return all items from a given feed"""
 
         result = [i.fields() for i in Item.select().where(Item.feed == id)]
-        db.close()
         return result
 
 
@@ -167,7 +164,6 @@ class FeedController:
             return r
         
         result = [i for i in Feed.select().annotate(Item,fn.Count(Item.id).alias('item_count')).where(Feed.enabled == enabled)]
-        db.close()
         result = map(_merge, result)
         return result
 
@@ -178,7 +174,6 @@ class FeedController:
             result = [f for f in Feed.select()]
         else:
             result = [f for f in Feed.select(Feed.enabled == True)]
-        db.close()
         return result
         
         
@@ -191,7 +186,6 @@ class FeedController:
             f = Feed.create(url = url, title=title, site_url=site_url)
         except:
             log.error(tb())
-        db.close()
         return f
 
 
@@ -324,6 +318,9 @@ class FeedController:
         feed.last_modified = time.mktime(last_modified) if last_modified else None
         self.after_fetch(feed, status = status)
         feed.last_status = status
+        
+        if not len(result.entries):
+            return
 
         result.entries.reverse()
         log.debug("%s - %d entries parsed" % (netloc,len(result.entries)))
@@ -332,7 +329,6 @@ class FeedController:
         
         now = time.time()
         for entry in result.entries:
-            db.close()
             when = get_entry_timestamp(entry)
             # skip ancient feed items
             if (now - when) < settings.fetcher.max_history:
@@ -360,8 +356,12 @@ class FeedController:
                             'tags'   : get_entry_tags(entry),
                             'when'   : when})
         
+        if not len(entries):
+            return
+
         log.debug("%s - %d entries in %fs" % (netloc, len(entries),time.time()-now))
         now = time.time()
+        
         
         records = 0
         now = time.time()
@@ -380,24 +380,23 @@ class FeedController:
             hrefs.append(entry['url'])
 
             lnow = time.time()
-            links = expand_links(feed, set(hrefs))
+            links = expand_links(set(hrefs))
             log.debug("%s - %d links in %fs" % (netloc, len(hrefs),time.time()-lnow))
             # TODO: replace hrefs in content, avoiding creating the item twice
             # including item url = hrefs[entry.link]
             # ...and handling updates
             #links = list(set(links.values()))
-            links = links.keys()
+            links = set(links.values())
             
             for link in links:
                 try:
-                    reference = Reference.get(item = item, link = Link.get(url = link))
+                    reference = Reference.get(item = item, link = Link.get(expanded_url = link))
                 except Reference.DoesNotExist:
-                    reference = Reference.create(item = item, link = Link.get(url = link))
+                    reference = Reference.create(item = item, link = Link.get(expanded_url = link))
                     records += 1
                 except:
                     log.error(tb())
 
-        db.close()
         log.debug("%s - %d records in %fs" % (netloc, records,time.time()-now))
 
         # TODO: favicons, download linked content, extract keywords, the works.
