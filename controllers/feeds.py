@@ -213,16 +213,16 @@ class FeedController:
         if feed.last_checked:
             if feed.ttl:
                 if (now - feed.last_checked) < (feed.ttl * 60):
-                    log.info("%s - throttled (TTL)" % netloc)
+                    log.info("TTL %s" % netloc)
                     return
                 
             if (now - feed.last_checked) < settings.fetcher.min_interval:
-                log.info("%s - throttled (interval)" % netloc)
+                log.info("INTERVAL %s" % netloc)
                 return
     
         if feed.last_modified:
             if (now - feed.last_modified) < settings.fetcher.min_interval:
-                log.info("%s - throttled (last-modified)" % netloc)
+                log.info("LAST_MODIFIED %s" % netloc)
                 return
             modified = http_time(feed.last_modified)
         else:
