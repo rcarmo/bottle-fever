@@ -114,7 +114,14 @@ def get_link_references(content):
     """Grab all the links from a post"""
     soup = BeautifulSoup(content, settings.fetcher.parser)
     links = soup.find_all('a', href=re.compile('.+'))
-    return [l['href'] for l in links]
+    
+    result = []
+    for l in links:
+        url = l['href']
+        (schema, netloc, path, params, query, fragment) = urlparse.urlparse(url)
+        if netloc and schema in ['http','https']:
+            result.append(url)
+    return result
 
 
 def expand_links(feed, links):
@@ -342,36 +349,22 @@ class FeedController:
             except Exception, e:
                 log.error(tb())
 
-
-            content = get_entry_content(entry)
-
-            if len(content):
-                hrefs = get_link_references(content)
-            else:
-                hrefs = []
-            hrefs.append(entry.link)
-
-            now = time.time()
-            hrefs = expand_links(feed, set(hrefs))
-            log.debug("%s - %d links in %fs" % (netloc, len(hrefs),time.time()-now))
-            url = hrefs[entry.link]
-            hrefs = list(set(hrefs.values()))
-
-            # stack these for commiting to the database later on
+            html = get_entry_content(entry)
+            # stack these for commiting to the database below
             entries.append({'guid'   : guid,
                             'feed'   : feed,
                             'title'  : get_entry_title(entry),
                             'author' : get_entry_author(entry,result.feed),
-                            'html'   : content,
-                            'url'    : url,
+                            'html'   : html,
+                            'url'    : entry.link,
                             'tags'   : get_entry_tags(entry),
-                            'when'   : when,
-                            'hrefs'  : hrefs})
+                            'when'   : when})
         
         log.debug("%s - %d entries in %fs" % (netloc, len(entries),time.time()-now))
         now = time.time()
         
         records = 0
+        now = time.time()
         for entry in entries:
             db.close()
             try:
@@ -379,29 +372,30 @@ class FeedController:
             except Item.DoesNotExist:
                 item = Item.create(**entry)
             records += 1
-                
-            for url in entry['hrefs']:
-                (schema, netloc, path, params, query, fragment) = urlparse.urlparse(url)
-                if netloc and schema in ['http','https']:
-                    try:
-                        link = Link.get(url = url)
-                    except Link.DoesNotExist:
-                        try:
-                            link = Link.get(expanded_url = url)
-                        except Link.DoesNotExist:
-                            expanded_url = expand(url)
-                            try:
-                                link = Link.create(url = url, expanded_url = expanded_url, when=time.time())
-                                records += 1
-                            except:
-                                log.error(tb())
-                    try:
-                        reference = Reference.get(item = item, link = link)
-                    except Reference.DoesNotExist:
-                        reference = Reference.create(item = item, link = link)
-                        records += 1
-                    except:
-                        log.error(tb())
+            
+            if len(entry['html']):
+                hrefs = get_link_references(entry['html'])
+            else:
+                hrefs = []
+            hrefs.append(entry['url'])
+
+            lnow = time.time()
+            links = expand_links(feed, set(hrefs))
+            log.debug("%s - %d links in %fs" % (netloc, len(hrefs),time.time()-lnow))
+            # TODO: replace hrefs in content, avoiding creating the item twice
+            # including item url = hrefs[entry.link]
+            # ...and handling updates
+            #links = list(set(links.values()))
+            links = links.keys()
+            
+            for link in links:
+                try:
+                    reference = Reference.get(item = item, link = Link.get(url = link))
+                except Reference.DoesNotExist:
+                    reference = Reference.create(item = item, link = Link.get(url = link))
+                    records += 1
+                except:
+                    log.error(tb())
 
         db.close()
         log.debug("%s - %d records in %fs" % (netloc, records,time.time()-now))
