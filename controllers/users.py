@@ -44,7 +44,7 @@ class UserController:
 
     @cached_method
     def get_groups_for_user(self, user):
-        q = Group.select(Group).join(Subscription).join(User).where(User.id == user.id).distinct()
+        q = Group.select(Group).join(Subscription).join(User).where(User.id == user.id).distinct().naive()
         result = [{'id':s.id,'title':s.title} for s in q]
         db.close()
         return result
@@ -52,7 +52,7 @@ class UserController:
 
     @cached_method
     def get_feed_groups_for_user(self, user):
-        q = Subscription.select(Subscription).join(User).where(User.id == user.id).distinct()
+        q = Subscription.select(Subscription).join(User).where(User.id == user.id).distinct().naive()
         groups = defaultdict(lambda: [])
         for s in q:
             groups[str(s.group.id)].append('%d' % s.feed.id)

@@ -13,18 +13,65 @@ import decimal
 import logging
 import operator
 import re
+import sys
 import threading
 from collections import deque, namedtuple
 from copy import deepcopy
 
 __all__ = [
-    'IntegerField', 'BigIntegerField', 'PrimaryKeyField', 'FloatField', 'DoubleField',
-    'DecimalField', 'CharField', 'TextField', 'DateTimeField', 'DateField', 'TimeField',
-    'BooleanField', 'ForeignKeyField', 'Model', 'DoesNotExist', 'ImproperlyConfigured',
-    'DQ', 'fn', 'SqliteDatabase', 'MySQLDatabase', 'PostgresqlDatabase', 'Field',
-    'JOIN_LEFT_OUTER', 'JOIN_INNER', 'JOIN_FULL', 'prefetch',
+    'BigIntegerField',
+    'BlobField',
+    'BooleanField',
+    'CharField',
+    'DateField',
+    'DateTimeField',
+    'DecimalField',
+    'DoesNotExist',
+    'DoubleField',
+    'DQ',
+    'Field',
+    'FloatField',
+    'fn',
+    'ForeignKeyField',
+    'ImproperlyConfigured',
+    'IntegerField',
+    'JOIN_FULL',
+    'JOIN_INNER',
+    'JOIN_LEFT_OUTER',
+    'Model',
+    'MySQLDatabase',
+    'PostgresqlDatabase',
+    'prefetch',
+    'PrimaryKeyField',
+    'SqliteDatabase',
+    'TextField',
+    'TimeField',
 ]
 
+# Python 2/3 compat
+def with_metaclass(meta, base=object):
+    return meta("NewBase", (base,), {})
+
+PY3 = sys.version_info[0] == 3
+if PY3:
+    import builtins
+    from collections import Callable
+    from functools import reduce
+    callable = lambda c: isinstance(c, Callable)
+    unicode_type = str
+    string_type = bytes
+    basestring = str
+    print_ = getattr(builtins, 'print')
+    binary_construct = lambda s: bytes(s.encode('raw_unicode_escape'))
+else:
+    unicode_type = unicode
+    string_type = basestring
+    binary_construct = buffer
+    def print_(s):
+        sys.stdout.write(s)
+        sys.stdout.write('\n')
+
+# DB libraries
 try:
     import sqlite3
 except ImportError:
@@ -60,6 +107,7 @@ if psycopg2:
     psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
     psycopg2.extensions.register_type(psycopg2.extensions.UNICODEARRAY)
 
+# Peewee
 logger = logging.getLogger('peewee')
 
 OP_AND = 0
@@ -72,7 +120,7 @@ OP_DIV = 13
 OP_AND = 14
 OP_OR = 15
 OP_XOR = 16
-OP_USER = 19
+OP_MOD = 17
 
 OP_EQ = 20
 OP_LT = 21
@@ -252,7 +300,7 @@ class FieldDescriptor(object):
         self.att_name = self.field.name
 
     def __get__(self, instance, instance_type=None):
-        if instance:
+        if instance is not None:
             return instance._data.get(self.att_name)
         return self.field
 
@@ -332,6 +380,9 @@ class Field(Leaf):
     def python_value(self, value):
         return value if value is None else self.coerce(value)
 
+    def __hash__(self):
+        return hash(self.name + '.' + self.model_class.__name__)
+
 
 class IntegerField(Field):
     db_field = 'int'
@@ -386,14 +437,11 @@ class DecimalField(Field):
             return decimal.Decimal(str(value))
 
 def format_unicode(s, encoding='utf-8'):
-    if isinstance(s, unicode):
+    if isinstance(s, unicode_type):
         return s
-    elif isinstance(s, basestring):
+    elif isinstance(s, string_type):
         return s.decode(encoding)
-    elif hasattr(s, '__unicode__'):
-        return s.__unicode__()
-    else:
-        return unicode(bytes(s), encoding)
+    return unicode_type(s)
 
 class CharField(Field):
     db_field = 'string'
@@ -411,6 +459,14 @@ class TextField(Field):
 
     def coerce(self, value):
         return format_unicode(value or '')
+
+class BlobField(Field):
+    db_field = 'blob'
+
+    def db_value(self, value):
+        if isinstance(value, basestring):
+            return binary_construct(value)
+        return value
 
 def format_date_time(value, formats, post_process=None):
     post_process = post_process or (lambda x: x)
@@ -504,7 +560,7 @@ class RelationDescriptor(FieldDescriptor):
         return rel_id
 
     def __get__(self, instance, instance_type=None):
-        if instance:
+        if instance is not None:
             return self.get_object_or_id(instance)
         return self.field
 
@@ -522,7 +578,7 @@ class ReverseRelationDescriptor(object):
         self.rel_model = field.model_class
 
     def __get__(self, instance, instance_type=None):
-        if instance:
+        if instance is not None:
             return self.rel_model.select().where(self.field==instance.get_id())
         return self
 
@@ -591,18 +647,19 @@ class ForeignKeyField(IntegerField):
 
 class QueryCompiler(object):
     field_map = {
-        'int': 'INTEGER',
         'bigint': 'INTEGER',
-        'float': 'REAL',
-        'double': 'REAL',
+        'blob': 'BLOB',
+        'bool': 'SMALLINT',
+        'date': 'DATE',
+        'datetime': 'DATETIME',
         'decimal': 'DECIMAL',
+        'double': 'REAL',
+        'float': 'REAL',
+        'int': 'INTEGER',
+        'primary_key': 'INTEGER',
         'string': 'VARCHAR',
         'text': 'TEXT',
-        'datetime': 'DATETIME',
-        'date': 'DATE',
         'time': 'TIME',
-        'bool': 'SMALLINT',
-        'primary_key': 'INTEGER',
     }
 
     op_map = {
@@ -620,9 +677,10 @@ class QueryCompiler(object):
         OP_SUB: '-',
         OP_MUL: '*',
         OP_DIV: '/',
-        OP_XOR: '^',
+        OP_XOR: '#',
         OP_AND: 'AND',
         OP_OR: 'OR',
+        OP_MOD: '%',
     }
 
     join_map = {
@@ -847,8 +905,8 @@ class QueryCompiler(object):
             order_by, _ = self.parse_expr_list(query._order_by, alias_map)
             parts.append('ORDER BY %s' % order_by)
 
-        if query._limit or (query._offset and not db.empty_limit):
-            limit = query._limit or -1
+        if query._limit or (query._offset and db.limit_max):
+            limit = query._limit or db.limit_max
             parts.append('LIMIT %s' % limit)
         if query._offset:
             parts.append('OFFSET %s' % query._offset)
@@ -1012,6 +1070,7 @@ class QueryResultWrapper(object):
         self.__ct += 1
         self.__idx += 1
         return obj
+    __next__ = next
 
     def fill_cache(self, n=None):
         n = n or float('Inf')
@@ -1064,7 +1123,8 @@ class ModelQueryResultWrapper(QueryResultWrapper):
     def process_row(self, row):
         collected = self.construct_instance(row)
         instances = self.follow_joins(collected)
-        map(lambda i: i.prepared(), instances)
+        for i in instances:
+            i.prepared()
         return instances[0]
 
     def construct_instance(self, row):
@@ -1575,10 +1635,10 @@ class DeleteQuery(Query):
 class Database(object):
     commit_select = False
     compiler_class = QueryCompiler
-    empty_limit = False
     field_overrides = {}
     for_update = False
     interpolation = '?'
+    limit_max = None
     op_overrides = {}
     quote_char = '"'
     reserved_tables = []
@@ -1710,9 +1770,9 @@ class Database(object):
     def sequence_exists(self, seq):
         raise NotImplementedError
 
-    def create_table(self, model_class):
+    def create_table(self, model_class, safe=False):
         qc = self.compiler()
-        return self.execute_sql(qc.create_table(model_class))
+        return self.execute_sql(qc.create_table(model_class, safe))
 
     def create_index(self, model_class, fields, unique=False):
         qc = self.compiler()
@@ -1741,6 +1801,7 @@ class Database(object):
 
 
 class SqliteDatabase(Database):
+    limit_max = -1
     op_overrides = {
         OP_LIKE: 'GLOB',
         OP_ILIKE: 'LIKE',
@@ -1757,15 +1818,15 @@ class SqliteDatabase(Database):
         return rows
 
     def get_tables(self):
-        res = self.execute_sql('select name from sqlite_master where type="table" order by name')
+        res = self.execute_sql('select name from sqlite_master where type="table" order by name;')
         return [r[0] for r in res.fetchall()]
 
 
 class PostgresqlDatabase(Database):
     commit_select = True
-    empty_limit = True
     field_overrides = {
         'bigint': 'BIGINT',
+        'blob': 'BYTEA',
         'bool': 'BOOLEAN',
         'datetime': 'TIMESTAMP',
         'decimal': 'NUMERIC',
@@ -1838,7 +1899,12 @@ class MySQLDatabase(Database):
     }
     for_update = True
     interpolation = '%s'
-    op_overrides = {OP_LIKE: 'LIKE BINARY', OP_ILIKE: 'LIKE'}
+    limit_max = 2 ** 64 - 1  # MySQL quirk
+    op_overrides = {
+        OP_LIKE: 'LIKE BINARY',
+        OP_ILIKE: 'LIKE',
+        OP_XOR: 'XOR',
+    }
     quote_char = '`'
     subquery_delete_same_table = False
 
@@ -2020,7 +2086,7 @@ class BaseModel(type):
         primary_key = None
 
         # replace the fields with field descriptors, calling the add_to_class hook
-        for name, attr in cls.__dict__.items():
+        for name, attr in list(cls.__dict__.items()):
             cls._meta.indexes = list(cls._meta.indexes)
             if isinstance(attr, Field):
                 attr.add_to_class(cls, name)
@@ -2084,9 +2150,7 @@ class ModelAlias(object):
         return [FieldProxy(self, f) for f in self.model_class._meta.get_fields()]
 
 
-class Model(object):
-    __metaclass__ = BaseModel
-
+class Model(with_metaclass(BaseModel)):
     def __init__(self, *args, **kwargs):
         self._data = self._meta.get_default_dict()
         self._obj_cache = {} # cache of related objects
