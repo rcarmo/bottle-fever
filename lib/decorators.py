@@ -134,7 +134,9 @@ def memoize(f):
             ret = self[key] = self.f(*key)
             return ret
     return memodict(f)
-    
+
+
+# TODO: add timeout    
 
 class cached_method(object):
     """Memoization decorator for class members"""
