@@ -13,7 +13,6 @@ uc = UserController()
 @post('/fever/')
 def endpoint():
     result = Struct({'api_version':1, 'auth':0})
-    print request
     api_key = request.forms.get('api_key', None)
     if not api_key or 'api' not in request.query.keys():
         log.debug("<- %s" % result)
