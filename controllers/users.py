@@ -10,6 +10,8 @@ from collections import defaultdict
 
 class UserController:
 
+    # TODO: move mostly feed-centric methods to the feeds controller
+
     @cached_method
     def get_users(self):
         result = [u for u in User.select()]
@@ -47,6 +49,7 @@ class UserController:
         q = Feed.select(Feed).join(Subscription).join(User).where(User.id == user.id).distinct().naive()
         result = []
         for f in q:
+            # TODO: Change the model defaults in order to clean this up
             try:
                 result.append({
                     'id'                  : f.id,
