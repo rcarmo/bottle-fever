@@ -3,7 +3,7 @@ import os, sys, logging
 
 log = logging.getLogger()
 
-from models import User, Group, Subscription, Feed, Item, Read, db
+from models import User, Group, Subscription, Feed, Item, Read, Favicon, db
 from config import settings
 from decorators import cached_method
 from collections import defaultdict
@@ -45,15 +45,28 @@ class UserController:
     @cached_method
     def get_feeds_for_user(self, user):
         q = Feed.select(Feed).join(Subscription).join(User).where(User.id == user.id).distinct().naive()
-        result = [{
-            'id'                  : f.id,
-            'favicon_id'          : f.favicon,
-            'title'               : f.title,
-            'url'                 : f.url,
-            'site_url'            : f.site_url,
-            'is_spark'            : 0, # TODO: implement this field in the model
-            'last_updated_on_time': f.last_checked
-        } for f in q]
+        result = []
+        for f in q:
+            try:
+                result.append({
+                    'id'                  : f.id,
+                    'favicon_id'          : f.favicon.id,
+                    'title'               : f.title,
+                    'url'                 : f.url,
+                    'site_url'            : f.site_url,
+                    'is_spark'            : 0, # TODO: implement this field in the model
+                    'last_updated_on_time': f.last_checked
+                })
+            except Favicon.DoesNotExist:
+                result.append({
+                    'id'                  : f.id,
+                    'favicon_id'          : 0,
+                    'title'               : f.title,
+                    'url'                 : f.url,
+                    'site_url'            : f.site_url,
+                    'is_spark'            : 0, # TODO: implement this field in the model
+                    'last_updated_on_time': f.last_checked
+                })
         db.close()
         return result
 
