@@ -74,4 +74,4 @@ def fetch_anyway(site):
         data = handler(site)
         if data:
             return data
-    return default
+    return _default
