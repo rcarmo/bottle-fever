@@ -13,11 +13,12 @@ import socket, hashlib, urllib, urllib2, urlparse
 
 log = logging.getLogger()
 
-from models import Feed, Item, Link, Reference, db
+from models import Feed, Item, Link, Reference, Favicon, db
 from peewee import fn
 from config import settings
 from utils.timekit import http_time
 from utils.urlkit import expand, fetch
+from utils.favicon import fetch_anyway
 from utils import tb
 from bs4 import BeautifulSoup
 import markup.feedparser as feedparser
@@ -400,7 +401,16 @@ class FeedController:
         log.debug("%s - %d records in %fs" % (netloc, records,time.time()-now))
         db.close()
 
-        # TODO: favicons, download linked content, extract keywords, the works.
+        try:
+            favicon = Favicon.get(feed.favicon)
+        except Favicon.DoesNotExist:
+            favicon = Favicon.create(data=fetch_anyway(feed.site_url))
+            feed.favicon = favicon
+            feed.save()
+        db.close()
+
+
+        # TODO: download linked content, extract keywords, the works.
         
 
 def feed_worker(feed):
