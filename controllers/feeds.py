@@ -13,10 +13,9 @@ import socket, hashlib, urllib, urllib2, urlparse
 
 log = logging.getLogger()
 
-from models import Feed, User, Group, Item, Filter, Link, Reference, Favicon, db
-from peewee import fn, JOIN_LEFT_OUTER
+from models import Feed, Item, Link, Reference, db
+from peewee import fn
 from config import settings
-from decorators import cached_method
 from utils.timekit import http_time
 from utils.urlkit import expand, fetch
 from utils import tb
@@ -154,8 +153,8 @@ class FeedController:
 
         result = [i.fields() for i in Item.select().where(Item.feed == id)]
         return result
-
-
+    
+    
     def get_feeds_with_counts(self, enabled = True):
         """Return feeds - defaults to returning enabled feeds only"""
         
