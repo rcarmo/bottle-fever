@@ -159,6 +159,8 @@ def setup(skip_if_existing = True):
     try:
         import hashlib
         User.create(username='default',api_key=hashlib.md5('default:default').hexdigest())
+        import utils.favicon
+        Favicon.create(id=0,data=utils.favicon._default)
     except:
         pass
     # set Write Ahead Log mode for SQLite
