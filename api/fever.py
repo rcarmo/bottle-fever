@@ -3,22 +3,36 @@ import os, sys, logging
 log = logging.getLogger()
 
 from bottle import post, request, response, abort
+from utils import Struct
 import time
 
-from controllers.feeds import FeedController
+from controllers.users import UserController
 
-fc = FeedController()
+uc = UserController()
 
 @post('/fever/')
 def endpoint():
+    result = Struct({'api_version':1, 'auth':0})
     print request
     api_key = request.forms.get('api_key', None)
     if not api_key or 'api' not in request.query.keys():
-        abort(403,'Not Authorized')
-    # TODO: validate API key
+        log.debug("<- %s" % result)
+        return result
+
+    u = uc.get_user_by_api_key(api_key)
+    if not u:
+        log.debug("<- %s" % result)
+        return result
+
+    result.auth = 1
+
     if len(request.query.keys()) == 1: # nothing requested
-        return {'api_version':1, 'auth':1,
-                'last_refreshed_on_time':int(time.time())}
+        result.last_refreshed_on_time = int(time.time())
+        log.debug("<- %s" % result)
+        return result
     
     if 'groups' in request.GET:
-        return c.get_groups()
+        result.groups = uc.get_groups_for_user(u)
+        result.feeds_groups = uc.get_feed_groups_for_user(u)
+        log.debug("<- %s" % result)
+        return result
