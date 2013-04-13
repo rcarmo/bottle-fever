@@ -157,7 +157,8 @@ def setup(skip_if_existing = True):
         if item[1].__module__ == __name__:
             item[1].create_table(skip_if_existing)
     try:
-        User.create(username='default',api_key='default')
+        import hashlib
+        User.create(username='default',api_key=hashlib.md5('default:default').hexdigest())
     except:
         pass
     # set Write Ahead Log mode for SQLite
