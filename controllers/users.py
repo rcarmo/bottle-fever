@@ -6,9 +6,11 @@ log = logging.getLogger()
 from models import User, Group, Subscription, db
 from config import settings
 from decorators import cached_method
+from collections import defaultdict
 
 class UserController:
 
+    @cached_method
     def get_users(self):
         result = [u for u in User.select()]
         db.close()
@@ -23,6 +25,13 @@ class UserController:
 
 
     @cached_method
+    def get_user_by_api_key(self, api_key):
+        result = User.get(User.api_key == api_key)
+        db.close()
+        return result
+
+
+    @cached_method
     def get_group(self, title):
         db.connect()
         try:
@@ -32,10 +41,25 @@ class UserController:
         db.close()
         return g
   
-        
-    def get_subscriptions_for(self, user):
-        result = [s for s in Subscriptions.select(user = user)]
+
+    @cached_method
+    def get_groups_for_user(self, user):
+        q = Group.select(Group).join(Subscription).join(User).where(User.id == user.id).distinct()
+        result = [{'id':s.id,'title':s.title} for s in q]
         db.close()
+        return result
+
+
+    @cached_method
+    def get_feed_groups_for_user(self, user):
+        q = Subscription.select(Subscription).join(User).where(User.id == user.id).distinct()
+        groups = defaultdict(lambda: [])
+        for s in q:
+            groups[str(s.group.id)].append('%d' % s.feed.id)
+        log.debug(groups)
+        result = []
+        for g in groups.keys():
+            result.append({'group':g, 'feed_ids':','.join(groups[g])})
         return result
              
     def add_feed_to_group(self, user, feed, group):
