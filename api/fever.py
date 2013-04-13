@@ -10,6 +10,8 @@ from controllers.users import UserController
 
 uc = UserController()
 
+# TODO: caching
+
 @post('/fever/')
 def endpoint():
     result = Struct({'api_version':1, 'auth':0})
@@ -34,4 +36,15 @@ def endpoint():
         result.groups = uc.get_groups_for_user(u)
         result.feeds_groups = uc.get_feed_groups_for_user(u)
         log.debug("<- %s" % result)
+        return result
+
+    if 'feeds' in request.GET:
+        result.feeds = uc.get_feeds_for_user(u)
+        result.feeds_groups = uc.get_feed_groups_for_user(u)
+        log.debug("<- %s" % result)
+        return result
+
+    if 'unread_item_ids' in request.GET:
+        result.unread_item_ids = uc.get_unread_items_for_user(u)
+        log.debug("<- %s" %  result)
         return result
