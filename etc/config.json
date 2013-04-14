@@ -13,7 +13,7 @@
         "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_3) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1309.0 Safari/537.17",
         "fetch_timeout": 30,
         "link_timeout": 5,
-        "min_interval": 9,
+        "min_interval": 900,
         "max_history": 604800,
         "#": "number of errors before we invalidate a feed", 
         "error_threshold": 100,

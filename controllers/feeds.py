@@ -402,7 +402,7 @@ class FeedController:
         db.close()
 
         try:
-            favicon = Favicon.get(feed.favicon)
+            favicon = Favicon.get(id = feed.favicon)
         except Favicon.DoesNotExist:
             favicon = Favicon.create(data=fetch_anyway(feed.site_url))
             feed.favicon = favicon

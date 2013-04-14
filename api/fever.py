@@ -4,11 +4,12 @@ log = logging.getLogger()
 
 from bottle import post, request, response, abort
 from utils import Struct
-import time
+import time, re
 
 from controllers.users import UserController
 
 uc = UserController()
+_digits = re.compile('[0-9]+')
 
 # TODO: caching
 
@@ -45,6 +46,36 @@ def endpoint():
         return result
 
     if 'unread_item_ids' in request.GET:
-        result.unread_item_ids = uc.get_unread_items_for_user(u)
+        unread_items = uc.get_unread_items_for_user(u)
+        if len(unread_items):
+            result.unread_item_ids = ','.join(map(str,unread_items))
         log.debug("<- %s" %  result)
         return result
+
+    if 'saved_item_ids' in request.GET:
+        saved_items = uc.get_saved_items_for_user(u)
+        if len(saved_items):
+            result.saved_item_ids = ','.join(map(str,saved_items))
+        log.debug("<- %s" %  result)
+        return result
+
+    if 'items' in request.GET:
+        ids = [int(i) for i in request.query.get('with_ids','').split(',') if _digits.match(i)]
+        since_id = int(request.query.get('since_id',0))
+        if len(ids):
+            result.items = uc.get_items_for_user(u, ids)
+        elif since_id:
+            result.items = uc.get_items_for_user_since(u, int(since_id))
+        result.total_items = uc.get_item_count_for_user(u)
+        log.debug("<- %s" %  result)
+        return result
+
+    # Hot links
+    if 'links' in request.GET:
+        result.links = [] # stubbed out until we can index content
+        log.debug("<- %s" %  result)
+        return result
+
+    # TODO: handle mark, as, id
+    log.debug(request.forms.keys())
+
