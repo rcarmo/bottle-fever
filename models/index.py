@@ -7,7 +7,7 @@ from whoosh.fields import Schema, TEXT, ID, DATETIME, KEYWORD
 from whoosh.index import create_in
 
 item_schema = Schema(
-    id = ID(stored=True, unique=True),
+    guid = ID(stored=True, unique=True),
     title = TEXT(stored=True),
     text = TEXT(stored=True),
     when = DATETIME(stored=True),

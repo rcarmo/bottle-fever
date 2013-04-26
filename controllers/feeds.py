@@ -23,6 +23,7 @@ from utils import tb
 from bs4 import BeautifulSoup
 import markup.feedparser as feedparser
 from whoosh.index import open_dir
+from whoosh.writing import AsyncWriter
 try:
     import markup.speedparser.speedparser as speedparser
 except ImportError, e: # speedparser or its dependencies are not available
@@ -367,7 +368,8 @@ class FeedController:
         records = 0
         now = time.time()
         ix = open_dir(settings.index)
-        writer = ix.writer()
+        writer = AsyncWriter(ix)
+
         for entry in entries:
             db.close()
             try:
@@ -380,7 +382,7 @@ class FeedController:
                 soup = BeautifulSoup(entry['html'], settings.fetcher.parser)
                 plaintext = ' '.join(soup.find_all(text=True))
                 writer.add_document(
-                    id = item.id,
+                    guid = item.guid,
                     title = entry['title'],
                     text = plaintext,
                     when = datetime.datetime.utcfromtimestamp(item.when)
@@ -411,7 +413,7 @@ class FeedController:
 
         log.debug("%s - %d records in %fs" % (netloc, records,time.time()-now))
         db.close()
-        writer.close()
+        writer.commit()
 
         try:
             favicon = Favicon.get(id = feed.favicon)
