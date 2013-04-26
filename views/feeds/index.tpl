@@ -5,9 +5,18 @@
 %log = logging.getLogger()
 
 <script type="text/python">
-import zest
+def on_click_sort(ev):
+    print(dir(ev))
+    p = ev.srcElement.parent
+    print(dir(p))
+    print(p.get(selector='th'))
+    col_index = headers.index(ev.srcElement)
+    alert(col_index)
 
-print(zest.zest('div'))
+for el in doc.get(selector='[data-sortable]'):
+    print(el)
+    el.onclick = on_click_sort
+#map(lambda x: x.callback = on_click_sort, doc.get(selector='[data-sortable]'))
 </script>
 
 <table id="feeds" class="ink-table ink-hover ink-zebra ink-bordered">
@@ -15,9 +24,9 @@ print(zest.zest('div'))
         <tr>
 %for h in headers:
 %    if 'label' in h:
-            <th>{{h['label']}}</th>
+            <th data-sortable="true">{{h['label']}}</th>
 %    elif 'icon' in h:
-            <th><i class="{{h['icon']}}"></i></th>
+            <th data-sortable="true"><i class="{{h['icon']}}"></i></th>
 %    end
 %end
         </tr>

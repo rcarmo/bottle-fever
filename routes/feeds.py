@@ -52,5 +52,5 @@ def index():
         {'label': 'Status',     'field': 'last_status'},
         {'label': 'Items',      'field': 'item_count'},
     ]
-    return {'headers': headers, 'feeds': feeds, 'title': 'feeds'}
+    return {'headers': headers, 'feeds': feeds[1:10], 'title': 'feeds'}
 

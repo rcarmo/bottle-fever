@@ -3,6 +3,7 @@
     "debug": true,
     "environment": "dev",
     "db": "data/store.db",
+    "index": "data/index",
     "server": {
         "http": {
             "bind_address": "0.0.0.0",

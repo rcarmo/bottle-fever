@@ -1,3 +1,4 @@
+whoosh>=2.4.1
 # Required if you use the 'greenlet' or 'mixed' threading modes in the fetcher - check the config.json file
 gevent>=0.13.8
 # Optional (check the config.json file)

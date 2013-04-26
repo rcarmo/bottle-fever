@@ -24,6 +24,7 @@ log = logging.getLogger()
 # load modules
 import models, controllers
 models.setup()
+models.setup_index()
 
 def grouper(n, iterable):
     it = iter(iterable)

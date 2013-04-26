@@ -22,6 +22,7 @@ from utils.favicon import fetch_anyway
 from utils import tb
 from bs4 import BeautifulSoup
 import markup.feedparser as feedparser
+from whoosh.index import open_dir
 try:
     import markup.speedparser.speedparser as speedparser
 except ImportError, e: # speedparser or its dependencies are not available
@@ -110,9 +111,8 @@ def get_feed_updated(feed):
     return time.time()
 
 
-def get_link_references(content):
+def get_link_references(soup):
     """Grab all the links from a post"""
-    soup = BeautifulSoup(content, settings.fetcher.parser)
     links = soup.find_all('a', href=re.compile('.+'))
     
     result = []
@@ -366,6 +366,8 @@ class FeedController:
         
         records = 0
         now = time.time()
+        ix = open_dir(settings.index)
+        writer = ix.writer()
         for entry in entries:
             db.close()
             try:
@@ -373,9 +375,18 @@ class FeedController:
             except Item.DoesNotExist:
                 item = Item.create(**entry)
             records += 1
-            
+
             if len(entry['html']):
-                hrefs = get_link_references(entry['html'])
+                soup = BeautifulSoup(entry['html'], settings.fetcher.parser)
+                plaintext = ' '.join(soup.find_all(text=True))
+                writer.add_document(
+                    id = item.id,
+                    title = entry['title'],
+                    text = plaintext,
+                    when = datetime.datetime.utcfromtimestamp(item.when)
+                )
+
+                hrefs = get_link_references(soup)
             else:
                 hrefs = []
             hrefs.append(entry['url'])
@@ -400,6 +411,7 @@ class FeedController:
 
         log.debug("%s - %d records in %fs" % (netloc, records,time.time()-now))
         db.close()
+        writer.close()
 
         try:
             favicon = Favicon.get(id = feed.favicon)
