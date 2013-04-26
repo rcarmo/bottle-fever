@@ -35,7 +35,7 @@ def dumb_fetcher(site):
     try:
         res = fetch(endpoint)
     except Exception, e:
-        log.error("could not fetch %s: %s" % (endpoint, tb_info()))
+        log.error("could not fetch %s: %s" % (endpoint, e))
         return None
     return data_uri(res['content-type'], res['data'])
    
