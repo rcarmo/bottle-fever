@@ -16,6 +16,10 @@
         "link_timeout": 5,
         "min_interval": 900,
         "max_history": 604800,
+        "post_processing": {
+            "#": "expand URLs in content and strip typical tracking junk",
+            "expand_links": True
+        },
         "#": "number of errors before we invalidate a feed", 
         "error_threshold": 100,
         "#": "HTML parser: html.parser, lxml or html5lib",
@@ -25,9 +29,9 @@
         "#": "multiprocessing, gevent or mixed",
         "engine": "mixed",
         "#": "number of processes",
-        "pool": 8,
+        "pool": 4,
         "#": "number of greenlets launched per pool worker",
-        "mix_pool": 8
+        "mix_pool": 4
     },
     "expander": {
         "#": "don't expand links to the following domains - these are wildcards, not pure regexps",

@@ -14,7 +14,7 @@ log = logging.getLogger()
 import config
 from peewee import *
 
-db = SqliteDatabase(config.settings.db,threadlocals=True)
+db = SqliteDatabase(config.settings.db, check_same_thread=False)
 
 class CustomModel(Model):
     """Binds the database to all our models"""

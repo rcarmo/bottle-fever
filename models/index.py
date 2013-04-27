@@ -3,11 +3,12 @@ import os, sys, logging
 log = logging.getLogger()
 
 from config import settings
-from whoosh.fields import Schema, TEXT, ID, DATETIME, KEYWORD
+from whoosh.fields import Schema, TEXT, ID, DATETIME, KEYWORD, NUMERIC
 from whoosh.index import create_in
 
 item_schema = Schema(
-    guid = ID(stored=True, unique=True),
+    id = NUMERIC(stored=True, unique=True),
+    guid = TEXT(stored=True),
     title = TEXT(stored=True),
     text = TEXT(stored=True),
     when = DATETIME(stored=True),

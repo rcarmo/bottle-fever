@@ -129,9 +129,9 @@ def expand_links(links):
     """Try to expand a link without locking the database"""
     result = {}
     for l in links:
-        db.close()
         (schema, netloc, path, params, query, fragment) = urlparse.urlparse(l)
         if netloc and schema in ['http','https']:
+            db.close()
             try:
                 link = Link.get(url = l)
                 result[l] = link.expanded_url
@@ -139,6 +139,7 @@ def expand_links(links):
                 expanded_url = expand(l, timeout = settings.fetcher.link_timeout)
                 try:
                     Link.create(url = l, expanded_url = expanded_url, when = time.time())
+                    db.close()
                 except:
                     log.error(tb())
                 result[l] = expanded_url
@@ -371,18 +372,19 @@ class FeedController:
         writer = AsyncWriter(ix)
 
         for entry in entries:
-            db.close()
             try:
                 item = Item.get(guid = entry['guid'])
             except Item.DoesNotExist:
                 item = Item.create(**entry)
             records += 1
 
+            db.close()
             if len(entry['html']):
                 soup = BeautifulSoup(entry['html'], settings.fetcher.parser)
-                plaintext = ' '.join(soup.find_all(text=True))
+                plaintext = ''.join(soup.find_all(text=True))
                 writer.add_document(
-                    guid = item.guid,
+                    id = item.id,
+                    guid = unicode(item.guid),
                     title = entry['title'],
                     text = plaintext,
                     when = datetime.datetime.utcfromtimestamp(item.when)
@@ -392,6 +394,9 @@ class FeedController:
             else:
                 hrefs = []
             hrefs.append(entry['url'])
+            
+            if not settings.post_processing.expand_links:
+                return
 
             lnow = time.time()
             links = expand_links(set(hrefs))
@@ -403,6 +408,7 @@ class FeedController:
             links = set(links.values())
             
             for link in links:
+                db.close()
                 try:
                     reference = Reference.get(item = item, link = Link.get(expanded_url = link))
                 except Reference.DoesNotExist:
