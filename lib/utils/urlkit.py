@@ -98,7 +98,10 @@ def expand(url, remove_junk = True, timeout = None):
     if remove_junk:
         result = scrub_query(result)
     #log.debug(u"%s -> %s" % (url,result))
-    return result    
+    if fragment:
+        return "%s#%s" % (result, fragment)
+    else:
+        return result
 
 
 def scrub_query(url):
