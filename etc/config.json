@@ -18,7 +18,7 @@
         "max_history": 604800,
         "post_processing": {
             "#": "expand URLs in content and strip typical tracking junk",
-            "expand_links": True
+            "expand_links": true
         },
         "#": "number of errors before we invalidate a feed", 
         "error_threshold": 100,

@@ -395,7 +395,7 @@ class FeedController:
                 hrefs = []
             hrefs.append(entry['url'])
             
-            if not settings.post_processing.expand_links:
+            if not settings.fetcher.post_processing.expand_links:
                 return
 
             lnow = time.time()
