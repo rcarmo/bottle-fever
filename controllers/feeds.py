@@ -131,7 +131,6 @@ def expand_links(links):
     for l in links:
         (schema, netloc, path, params, query, fragment) = urlparse.urlparse(l)
         if netloc and schema in ['http','https']:
-            db.close()
             try:
                 link = Link.get(url = l)
                 result[l] = link.expanded_url
@@ -139,7 +138,6 @@ def expand_links(links):
                 expanded_url = expand(l, timeout = settings.fetcher.link_timeout)
                 try:
                     Link.create(url = l, expanded_url = expanded_url, when = time.time())
-                    db.close()
                 except:
                     log.error(tb())
                 result[l] = expanded_url
@@ -149,6 +147,13 @@ def expand_links(links):
     
 
 class FeedController:
+
+    def __init__(self):
+        db.connect()
+
+
+    def __del__(self):
+        db.close()
 
 
     def get_items_from_feed(self, id):
@@ -201,7 +206,6 @@ class FeedController:
             feed.enabled = False
             log.warn("%s - disabling %s" % (netloc, feed.url))
         feed.save()
-        db.close()
     
     
     def fetch_feed(self, feed):
@@ -378,7 +382,6 @@ class FeedController:
                 item = Item.create(**entry)
             records += 1
 
-            db.close()
             if len(entry['html']):
                 soup = BeautifulSoup(entry['html'], settings.fetcher.parser)
                 plaintext = ''.join(soup.find_all(text=True))
@@ -408,7 +411,6 @@ class FeedController:
             links = set(links.values())
             
             for link in links:
-                db.close()
                 try:
                     reference = Reference.get(item = item, link = Link.get(expanded_url = link))
                 except Reference.DoesNotExist:
@@ -418,7 +420,6 @@ class FeedController:
                     log.error(tb())
 
         log.debug("%s - %d records in %fs" % (netloc, records,time.time()-now))
-        db.close()
         writer.commit()
 
         try:
@@ -427,7 +428,6 @@ class FeedController:
             favicon = Favicon.create(data=fetch_anyway(feed.site_url))
             feed.favicon = favicon
             feed.save()
-        db.close()
 
 
         # TODO: download linked content, extract keywords, the works.

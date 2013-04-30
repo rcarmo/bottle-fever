@@ -11,10 +11,18 @@ import os, sys, logging, inspect
 
 log = logging.getLogger()
 
-import config
+from config import settings
 from peewee import *
 
-db = SqliteDatabase(config.settings.db, check_same_thread=False)
+if settings.db.back_end == 'sqlite3':
+    db = SqliteDatabase(settings.db.sqlite3.filename, check_same_thread=False)
+elif settings.db.back_end == 'postgres':
+    db = PostgresqlDatabase(settings.db.postgres.name)
+    db.connect()
+else:
+    print "Unknown database backend"
+    sys.exit(2)
+
 
 class CustomModel(Model):
     """Binds the database to all our models"""
@@ -61,20 +69,15 @@ class Group(CustomModel):
     title = CharField(default='Default')
     
 
-class Filter(CustomModel):
-    """Feed filters"""
-    title = CharField()
-    
-
 class Feed(CustomModel):
     """RSS Feed"""
     enabled              = BooleanField(default=True)
-    favicon              = ForeignKeyField(Favicon,default=0)
+    favicon              = ForeignKeyField(Favicon,default=1)
     title                = CharField(default='Untitled')
     url                  = CharField()
     site_url             = CharField()
     ttl                  = IntegerField(null=True,default=3600) # seconds
-    apply_filter         = ForeignKeyField(Filter,default=0)
+    filters              = CharField(null=True)
     etag                 = CharField(null=True)
     last_modified        = IntegerField(null=True) # epoch
     last_checked         = IntegerField(default=0) # epoch
@@ -152,18 +155,21 @@ class Subscription(CustomModel):
 
 def setup(skip_if_existing = True):
     """Create tables for all models"""
-    for item in inspect.getmembers(sys.modules[__name__], inspect.isclass):
-        # make sure we only handle classes defined locally, not imports
-        if item[1].__module__ == __name__:
-            item[1].create_table(skip_if_existing)
+    models = [User, Favicon, Feed, Item, Group, Link, Read, Saved, Subscription, Reference]
+
+    for item in models:
+        item.create_table(skip_if_existing)
     try:
         import hashlib
         User.create(username='default',api_key=hashlib.md5('default:default').hexdigest())
+    except:
+        pass
+    try:
         import utils.favicon
         Favicon.create(id=0,data=utils.favicon._default)
     except:
         pass
     # set Write Ahead Log mode for SQLite
-    db.execute_sql('PRAGMA journal_mode=WAL')
-    db.close()
+    if settings.db.back_end == 'sqlite3':
+        db.execute_sql('PRAGMA journal_mode=WAL')
 

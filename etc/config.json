@@ -2,7 +2,17 @@
     "reloader": true,
     "debug": true,
     "environment": "dev",
-    "db": "data/store.db",
+    "db": {
+        "#": "SQLite back-end. Works, but is finicky with threading.",
+        "sqlite3": {
+            "filename": "data/store.db"
+        },
+        "#": "Postgres. Works fine, even inside Android. This assumes the current user has been granted access to the feeds database using GRANT ALL PRIVILEGES ON DATABASE feeds TO username",
+        "postgres": {
+            "name": "feeds"
+        },
+        "back_end": "postgres"
+    },
     "index": "data/index",
     "server": {
         "http": {

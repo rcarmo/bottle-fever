@@ -10,37 +10,38 @@ from collections import defaultdict
 
 class UserController:
 
+    def __init__(self):
+        db.connect()
+
+    def __del__(self):
+        db.close()
+
     # TODO: move mostly feed-centric methods to the feeds controller
 
     @cached_method
     def get_users(self):
         result = [u for u in User.select()]
-        db.close()
         return result
 
 
     @cached_method
     def get_user(self, username):
         result = User.get(User.username == username)
-        db.close()
         return result
 
 
     @cached_method
     def get_user_by_api_key(self, api_key):
         result = User.get(User.api_key == api_key)
-        db.close()
         return result
 
 
     @cached_method
     def get_group(self, title):
-        db.connect()
         try:
             g = Group.get(Group.title == title)
         except Group.DoesNotExist:
             g = Group.create(title = title)
-        db.close()
         return g
   
 
@@ -70,7 +71,6 @@ class UserController:
                     'is_spark'            : 0, # TODO: implement this field in the model
                     'last_updated_on_time': f.last_checked
                 })
-        db.close()
         return result
 
 
@@ -78,7 +78,6 @@ class UserController:
     def get_groups_for_user(self, user):
         q = Group.select(Group).join(Subscription).join(User).where(User.id == user.id).distinct().naive()
         result = [{'id':s.id,'title':s.title} for s in q]
-        db.close()
         return result
 
 
@@ -162,5 +161,4 @@ class UserController:
 
     def add_feed_to_group(self, user, feed, group):
         s = Subscription.create(user = user, feed = feed, group = group)
-        db.close()
         return s
