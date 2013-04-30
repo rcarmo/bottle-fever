@@ -15,7 +15,7 @@ from config import settings
 from peewee import *
 
 if settings.db.back_end == 'sqlite3':
-    db = SqliteDatabase(settings.db.sqlite3.filename, check_same_thread=False)
+    db = SqliteDatabase(settings.db.sqlite3.filename, threadlocals=True)
 elif settings.db.back_end == 'postgres':
     db = PostgresqlDatabase(settings.db.postgres.name)
     db.connect()
