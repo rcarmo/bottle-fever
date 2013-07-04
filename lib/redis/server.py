@@ -66,6 +66,7 @@ class RedisServer(object):
         self.clients = {}
         self.tables = {}
         self.channels = {}
+        self.expiries = {}
         self.lastsave = int(time.time())
         self.path = config.storage.path
         self.meta = Haystack(self.path,'meta')
@@ -109,6 +110,13 @@ class RedisServer(object):
 
     def handle(self, client):
         """Handle commands"""
+
+        for e in [k for k in self.expiries.keys()]:
+            if self.expiries[e] >= time.time():
+                db, k = e.split()
+                del self.tables[db][k]
+                del self.expiries[e]
+
         line = client.rfile.readline()
         if not line:
             self.log(client, 'client disconnected')
@@ -194,6 +202,7 @@ class RedisServer(object):
             if db == 0:
                 # store table 0 as part of our metadata
                 self.meta['0'] = self.tables[0]
+                self.meta['expiries'] = self.expiries
                 self.meta.commit()
             else:
                 self.tables[db].commit()
@@ -205,6 +214,7 @@ class RedisServer(object):
             if db == 0:
                 self.tables[db] = {}
                 self.tables[db].update(self.meta.get('0',{}))
+                self.expiries = self.meta.get('expiries',{})
             else:
                 self.tables[db] = Haystack(self.path,str(db))
         client.db = db
@@ -243,6 +253,20 @@ class RedisServer(object):
             return 0
         del client.table[key]
         return 1
+
+
+    def handle_expire(self, client, key, ttl):
+        self.expiries["%s %s" % (client.db,key)] = time.time() + ttl
+        return 1
+
+
+    def handle_ttl(self, client, key):
+        if key not in client.table:
+            return -2
+        k = "%s %s" % (client.db, key)
+        if k not in self.expiries:
+            return -1
+        return int(self.expiries[k])
 
 
     def handle_flushdb(self, client):
@@ -492,6 +516,7 @@ class RedisServer(object):
         self.halt = True
         self.save()
         return self.handle_quit(client)
+
 
 def main(args):
     if os.name == 'posix':
