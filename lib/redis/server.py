@@ -270,6 +270,21 @@ class RedisServer(object):
         return data
 
 
+    def handle_mget(self, client, keys):
+        result = []
+        for k in keys:
+            data = client.table.get(k, None)
+            if isinstance(data, deque):
+                return BAD_VALUE
+            if data != None:
+                data = str(data)
+            else:
+                data = EMPTY_SCALAR
+            result.append(data)
+        self.log(client, 'MGET %s -> %s' % (keys, result))
+        return result
+
+
     def handle_incr(self, client, key):
         return self.handle_incrby(client, key, 1)
 
