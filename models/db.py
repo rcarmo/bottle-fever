@@ -82,8 +82,9 @@ class Feed(CustomModel):
     last_modified        = IntegerField(null=True) # epoch
     last_checked         = IntegerField(default=0) # epoch
     last_status          = IntegerField(null=True) # last HTTP code
+    last_content         = BlobField(null=True)    # unparsed feed content
     error_count          = IntegerField(default=0)
-    parsed_with          = IntegerField(default=0) # 1 for speedparser, 2 for feedparser
+    parsed_with          = IntegerField(default=0) # 0 for unparsed, 1 for speedparser, 2 for feedparser
 
     class Meta:
         indexes = (
