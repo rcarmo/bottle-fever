@@ -6,6 +6,9 @@ Vagrant.configure("2") do |config|
 
     # config.vm.network :forwarded_port, guest: 80, host: 8080
     config.vm.provision :shell, :inline => <<END
+# REMINDER - THESE RUN AS ROOT!
+echo "Vagrantfile: shell provisioner started."
+
 # Check if we need to perform a weekly pkgcache update
 touch -d '-1 week' /tmp/.limit
 if [ /tmp/.limit -nt /var/cache/apt/pkgcache.bin ]; then
@@ -22,11 +25,18 @@ if [ ! -e /usr/local/bin/fab ]; then
     sudo easy_install fabric
 fi
 
-echo "Checking for fabfile..."
+# generate a dummy keypair for Fabric automation
+if [ ! -e ~vagrant/.ssh/id_rsa.pub ]; then 
+    sudo -u vagrant ssh-keygen -f ~vagrant/.ssh/id_rsa -t rsa -N ''
+    cat ~vagrant/.ssh/id_rsa.pub >> ~vagrant/.ssh/authorized_keys
+    chown -R vagrant:vagrant ~vagrant/.ssh
+fi
+
+# run Fabric as vagrant user
 if [ -e /vagrant/fabfile ]; then
     cd /vagrant
-    fab provision
+    sudo -u vagrant fab vagrant provision
 fi
-echo "Done."
+echo "Vagrantfile: shell provisioner done."
 END
 end
