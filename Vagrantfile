@@ -21,7 +21,7 @@ if [ ! -e /usr/bin/easy_install ]; then
 fi
 
 if [ ! -e /usr/local/bin/fab ]; then
-    sudo apt-get -y install build-essential python-dev 
+    sudo apt-get -y install build-essential python2.7-dev
     sudo easy_install fabric
 fi
 
@@ -33,10 +33,10 @@ if [ ! -e ~vagrant/.ssh/id_rsa.pub ]; then
 fi
 
 # run Fabric as vagrant user
-if [ -e /vagrant/fabfile ]; then
-    cd /vagrant
-    sudo -u vagrant fab vagrant provision
-fi
+#if [ -e /vagrant/fabfile ]; then
+#    cd /vagrant
+#    sudo -u vagrant fab vagrant provision
+#fi
 echo "Vagrantfile: shell provisioner done."
 END
 end
