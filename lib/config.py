@@ -7,4 +7,11 @@ Description: Shared configuration data
 License: MIT (see LICENSE.md for details)
 """
 
-settings = None
+import os, sys, logging.config
+from utils import get_config
+
+try:
+    settings
+except NameError:
+    settings = get_config(os.path.join(os.path.dirname(__file__),'..','etc','config.json'))
+    logging.config.dictConfig(dict(settings.logging))
