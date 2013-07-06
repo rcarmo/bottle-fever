@@ -2,13 +2,14 @@
 # Based on a minimalist Redis server originally written by Benjamin Pollack
 
 from __future__ import with_statement
-from yaki.haystack import Haystack
 from collections import deque
-import os, sys, time, logging
+import os, sys, time, logging, signal, getopt
 import socket, select, thread, errno
 from random import sample
 
 log = logging.getLogger()
+
+from .haystack import Haystack
 
 class RedisConstant(object):
     def __init__(self, type):
@@ -67,10 +68,10 @@ class RedisServer(object):
         self.clients = {}
         self.tables = {}
         self.channels = {}
-        self.expiries = {}
         self.lastsave = int(time.time())
         self.path = config.storage.path
         self.meta = Haystack(self.path,'meta')
+        self.expiries = self.meta.get('expiries',{})
 
 
     def dump(self, client, o):
@@ -197,25 +198,16 @@ class RedisServer(object):
 
     def save(self):
         """Serialize tables to disk"""
+        self.meta['expiries'] = self.expiries
+        self.meta.commit()
         for db in self.tables:
-            if db == 0:
-                # store table 0 as part of our metadata
-                self.meta['0'] = self.tables[0]
-                self.meta['expiries'] = self.expiries
-                self.meta.commit()
-            else:
-                self.tables[db].commit()
+            self.tables[db].commit()
         self.lastsave = int(time.time())
 
 
     def select(self, client, db):
         if db not in self.tables:
-            if db == 0:
-                self.tables[db] = {}
-                self.tables[db].update(self.meta.get('0',{}))
-                self.expiries = self.meta.get('expiries',{})
-            else:
-                self.tables[db] = Haystack(self.path,str(db))
+            self.tables[db] = Haystack(self.path,'db'+str(db))
         client.db = db
         client.table = self.tables[db]
 
@@ -589,7 +581,8 @@ def main(args):
     if pid_file:
         with open(pid_file, 'w') as f:
             f.write('%s\n' % os.getpid())
-    m = MiniRedis(host=host, port=port, log_file=log_file, db_file=db_file)
+
+    m = RedisServer(host=host, port=port, log_file=log_file, db_file=db_file)
     try:
         m.run()
     except KeyboardInterrupt:
