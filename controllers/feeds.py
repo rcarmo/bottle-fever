@@ -15,11 +15,10 @@ log = logging.getLogger()
 
 from models import Feed, Item, Link, Reference, Favicon, db
 from peewee import fn
-from config import settings
 from utils.timekit import http_time
 from utils.urlkit import expand, fetch
 from utils.favicon import fetch_anyway
-from utils import tb
+from utils import Struct, tb
 from bs4 import BeautifulSoup
 import markup.feedparser as feedparser
 from whoosh.index import open_dir
@@ -31,124 +30,13 @@ except ImportError, e: # speedparser or its dependencies are not available
     pass
 
 
-feedparser.USER_AGENT = settings.fetcher.user_agent
-
-def get_entry_content(entry):
-    """Select the best content from an entry"""
-
-    candidates = entry.get('content', [])
-    if 'summary_detail' in entry:
-        candidates.append(entry.summary_detail)
-    for c in candidates:
-        if hasattr(c,'type'): # speedparser doesn't set this
-            if 'html' in c.type: 
-                return c.value
-    if candidates:
-        try:
-            return candidates[0].value
-        except AttributeError: # speedparser does this differently
-            return candidates[0]['value']
-    return ''
-    
-    
-def get_entry_title(entry):
-    if 'title' in entry:
-        return entry.title
-    return "Untitled"
-    
-
-def get_entry_id(entry):
-    """Get a useful id from a feed entry"""
-    
-    if 'id' in entry and entry.id: 
-        if type(entry.id) is dict:
-            return entry.id.values()[0]
-        return entry.id
-
-    content = get_entry_content(entry)
-    if content: 
-        return hashlib.sha1(content.encode('utf-8')).hexdigest()
-    if 'link' in entry: 
-        return entry.link
-    if 'title' in entry: 
-        return hashlib.sha1(entry.title.encode('utf-8')).hexdigest()
-
-
-def get_entry_tags(entry):
-    """Gather tags and return a comma-separated string"""
-    
-    tags = []
-    for tag in entry.get('tags',[]):
-        tags.append(tag['term'])
-    return ','.join(set(tags))
-    
-    
-def get_entry_author(entry, feed):
-    """Divine authorship"""
-    
-    if 'name' in entry.get('author_detail',[]):
-        return entry.author_detail.name
-     
-    elif 'name' in feed.get('author_detail', []):
-        return feed.author_detail.name
-    return None
-    
-    
-def get_entry_timestamp(entry):
-    """Select the best timestamp for an entry"""
-    for header in ['modified', 'issued', 'created']:
-        when = entry.get(header+'_parsed',None)
-        if when:
-            return time.mktime(when)
-    return time.time()
-    
-    
-def get_feed_updated(feed):
-    """Get the date a feed was last updated"""
-    for header in ['updated', 'published']:
-        when = entry.get(header+'_parsed',None)
-        if when:
-            return time.mktime(when)
-    return time.time()
-
-
-def get_link_references(soup):
-    """Grab all the links from a post"""
-    links = soup.find_all('a', href=re.compile('.+'))
-    
-    result = []
-    for l in links:
-        url = l['href']
-        (schema, netloc, path, params, query, fragment) = urlparse.urlparse(url)
-        if netloc and schema in ['http','https']:
-            result.append(url)
-    return result
-
-
-def expand_links(links):
-    """Try to expand a link without locking the database"""
-    result = {}
-    for l in links:
-        (schema, netloc, path, params, query, fragment) = urlparse.urlparse(l)
-        if netloc and schema in ['http','https']:
-            try:
-                link = Link.get(url = l)
-                result[l] = link.expanded_url
-            except Link.DoesNotExist:
-                expanded_url = expand(l, timeout = settings.fetcher.link_timeout)
-                try:
-                    Link.create(url = l, expanded_url = expanded_url, when = time.time())
-                except:
-                    log.error(tb())
-                result[l] = expanded_url
-        else:
-            result[l] = l
-    return result
-    
+from .tools import *
 
 class FeedController:
 
-    def __init__(self):
+    def __init__(self, settings):
+        feedparser.USER_AGENT = settings.fetcher.user_agent
+        self.setings = settings
         db.connect()
 
 
@@ -159,7 +47,7 @@ class FeedController:
     def get_items_from_feed(self, id):
         """Return all items from a given feed"""
 
-        result = [i.fields() for i in Item.select().where(Item.feed == id)]
+        result = [Struct(i) for i in Item.select().where(Item.feed == id).dicts()]
         return result
     
     
@@ -178,10 +66,13 @@ class FeedController:
         
     def get_feeds(self, all = False):
         """Return feeds - defaults to returning enabled feeds only"""
+
+        base = Feed.select(Feed.id, Feed.ttl, Feed.last_modified, Feed.last_checked)
+
         if all:
-            result = [f for f in Feed.select()]
+            result = (Struct(f) for f in base.dicts())
         else:
-            result = [f for f in Feed.select(Feed.enabled == True)]
+            result = (Struct(f) for f in base.where(Feed.enabled == True).dicts())
         return result
         
         
@@ -202,13 +93,21 @@ class FeedController:
             feed.last_status = status
         if error:
             feed.error_count = feed.error_count + 1
-        if feed.error_count > settings.fetcher.error_threshold:
+        if feed.error_count > self.settings.fetcher.error_threshold:
             feed.enabled = False
             log.warn("%s - disabling %s" % (netloc, feed.url))
         feed.save()
     
     
-    def fetch_feed(self, feed):
+    def fetch_feed(self, feed_id):
+        try:
+            feed = Feed.get(Feed.id == feed_id)
+        except Feed.DoesNotExist:
+            f = Feed.create(url = url, title=title, site_url=site_url)
+        except:
+            log.error(tb())
+        return f
+
 
         if not feed.enabled:
             return
@@ -223,12 +122,12 @@ class FeedController:
                     log.info("TTL %s" % netloc)
                     return
                 
-            if (now - feed.last_checked) < settings.fetcher.min_interval:
+            if (now - feed.last_checked) < self.settings.fetcher.min_interval:
                 log.info("INTERVAL %s" % netloc)
                 return
     
         if feed.last_modified:
-            if (now - feed.last_modified) < settings.fetcher.min_interval:
+            if (now - feed.last_modified) < self.settings.fetcher.min_interval:
                 log.info("LAST_MODIFIED %s" % netloc)
                 return
             modified = http_time(feed.last_modified)
@@ -236,7 +135,7 @@ class FeedController:
             modified = None
         
         try:
-            response = fetch(feed.url, etag = feed.etag, last_modified = modified, timeout=settings.fetcher.fetch_timeout)
+            response = fetch(feed.url, etag = feed.etag, last_modified = modified, timeout=self.settings.fetcher.fetch_timeout)
             log.debug("%s - %d, %d" % (feed.url, response['status'], len(response['data'])))
         except Exception, e:
             log.error("Could not fetch %s: %s" % (feed.url, e))
@@ -262,6 +161,9 @@ class FeedController:
             log.warn("%s - %d, aborting" % (netloc,status))
             self.after_fetch(feed, status = status, error = True)
             return
+
+
+    def parse_feed(self, feed):
 
         if feed.error_count and feed.parsed_with == 1: # there were errors last time around, so let's try feedparser this time
             try:
@@ -338,7 +240,7 @@ class FeedController:
         for entry in result.entries:
             when = get_entry_timestamp(entry)
             # skip ancient feed items
-            if (now - when) < settings.fetcher.max_history:
+            if (now - when) < self.settings.fetcher.max_history:
                 continue
 
             guid = get_entry_id(entry)
@@ -372,7 +274,7 @@ class FeedController:
         
         records = 0
         now = time.time()
-        ix = open_dir(settings.index)
+        ix = open_dir(self.settings.index)
         writer = AsyncWriter(ix)
 
         for entry in entries:
@@ -383,7 +285,7 @@ class FeedController:
             records += 1
 
             if len(entry['html']):
-                soup = BeautifulSoup(entry['html'], settings.fetcher.parser)
+                soup = BeautifulSoup(entry['html'], self.settings.fetcher.parser)
                 plaintext = ''.join(soup.find_all(text=True))
                 writer.add_document(
                     id = item.id,
@@ -398,7 +300,7 @@ class FeedController:
                 hrefs = []
             hrefs.append(entry['url'])
             
-            if not settings.fetcher.post_processing.expand_links:
+            if not self.settings.fetcher.post_processing.expand_links:
                 return
 
             lnow = time.time()
