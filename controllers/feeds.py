@@ -36,7 +36,7 @@ class FeedController:
 
     def __init__(self, settings):
         feedparser.USER_AGENT = settings.fetcher.user_agent
-        self.setings = settings
+        self.settings = settings
         db.connect()
 
 
@@ -67,7 +67,7 @@ class FeedController:
     def get_feeds(self, all = False):
         """Return feeds - defaults to returning enabled feeds only"""
 
-        base = Feed.select(Feed.id, Feed.ttl, Feed.last_modified, Feed.last_checked)
+        base = Feed.select(Feed.id, Feed.ttl, Feed.last_modified, Feed.last_checked, Feed.enabled)
 
         if all:
             result = (Struct(f) for f in base.dicts())
@@ -100,36 +100,16 @@ class FeedController:
     
     
     def fetch_feed(self, feed_id):
-        try:
-            feed = Feed.get(Feed.id == feed_id)
-        except Feed.DoesNotExist:
-            f = Feed.create(url = url, title=title, site_url=site_url)
-        except:
-            log.error(tb())
-        return f
-
+        feed = Feed.get(Feed.id == feed_id)
 
         if not feed.enabled:
-            return
+            raise AttributeError('Feed is disabled')
 
         (schema, netloc, path, params, query, fragment) = urlparse.urlparse(feed.url)
 
         now = time.time()
-        
-        if feed.last_checked:
-            if feed.ttl:
-                if (now - feed.last_checked) < (feed.ttl * 60):
-                    log.info("TTL %s" % netloc)
-                    return
-                
-            if (now - feed.last_checked) < self.settings.fetcher.min_interval:
-                log.info("INTERVAL %s" % netloc)
-                return
-    
+            
         if feed.last_modified:
-            if (now - feed.last_modified) < self.settings.fetcher.min_interval:
-                log.info("LAST_MODIFIED %s" % netloc)
-                return
             modified = http_time(feed.last_modified)
         else:
             modified = None
@@ -149,18 +129,34 @@ class FeedController:
 
         feed.last_status = status
         if status == 304: # not modified
-            log.info("%s - not modified." % netloc)
+            log.warn("%s - not modified." % netloc)
             self.after_fetch(feed, status = status)
-            return
+            return False
         elif status == 410: # gone
-            log.info("%s - gone, disabling %s" % (netloc, feed.url))
+            log.warn("%s - gone, disabling %s" % (netloc, feed.url))
             feed.enabled = False
             self.after_fetch(feed, status = status)
-            return
+            return False
         elif status not in [200,301,302,307,308]:
             log.warn("%s - %d, aborting" % (netloc,status))
             self.after_fetch(feed, status = status, error = True)
-            return
+            return False
+
+            ttl = result.feed.get('ttl',None)
+
+        last_modified = response.get('modified_parsed',None)
+        
+        if status in [301,308]:
+            feed.url = response['url']
+        feed.etag = response.get('etag',None)
+        feed.last_modified = time.mktime(last_modified) if last_modified else None
+
+        if (hashlib.md5(feed.last_content).digest() == hashlib.md5(response['data']).digest()):
+            return False
+
+        feed.last_content = response['data']
+        feed.save()
+        return True
 
 
     def parse_feed(self, feed):
