@@ -14,9 +14,9 @@ sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),'../li
 
 from config import settings
 from tasks.celery import celery
-from utils.urlkit import fetch, download
-from utils.rediskit import url_to_params
-from utils.core import Struct
+from utils.urlkit import fetch
+from utils import Struct
+from controllers import FeedController as Controller
 
 log = logging.getLogger()
 
@@ -27,12 +27,24 @@ def control_worker():
     
     c = Controller(settings)
 
+    now = time.time()
+    count = 0
+    for f in c.get_feeds():
+        if f.enabled:
+            if (not f.last_checked) or (((f.last_checked + f.ttl) > now) and ((f.last_checked + settings.fetcher.min_interval) > now)):
+                fetch_worker.delay(f.id)
+                count = count + 1
+    log.warn("Launching %d workers" % count)
+    return count
+
 
 @celery.task(max_retries=3)
 def fetch_worker(feed_id):
     """Fetch a feed and check if it needs further processing"""
 
     c = Controller(settings)
+    changed = c.fetch_feed(feed_id)
+    return changed
     
 
 @celery.task(max_retries=3)
