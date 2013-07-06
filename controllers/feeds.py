@@ -151,7 +151,7 @@ class FeedController:
         feed.etag = response.get('etag',None)
         feed.last_modified = time.mktime(last_modified) if last_modified else None
 
-        if (hashlib.md5(feed.last_content).digest() == hashlib.md5(response['data']).digest()):
+        if not response['data'] or (hashlib.md5(feed.last_content).digest() == hashlib.md5(response['data']).digest()):
             return False
 
         feed.last_content = response['data']
