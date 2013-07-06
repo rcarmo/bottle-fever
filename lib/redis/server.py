@@ -6,6 +6,7 @@ from yaki.haystack import Haystack
 from collections import deque
 import os, sys, time, logging
 import socket, select, thread, errno
+from random import sample
 
 log = logging.getLogger()
 
@@ -111,11 +112,9 @@ class RedisServer(object):
     def handle(self, client):
         """Handle commands"""
 
-        for e in [k for k in self.expiries.keys()]:
-            if self.expiries[e] >= time.time():
-                db, k = e.split()
-                del self.tables[db][k]
-                del self.expiries[e]
+        # check 25% of keys, like "real" Redis
+        for e in [k for k in sample(self.expiries.keys(), len(self.expiries.keys())/4)]:
+            self.check_ttl(client, e)
 
         line = client.rfile.readline()
         if not line:
@@ -240,14 +239,17 @@ class RedisServer(object):
 
 
     def handle_decr(self, client, key):
+        self.check_ttl(client, key)
         return self.handle_decrby(self, client, key, 1)
 
 
     def handle_decrby(self, client, key, by):
+        self.check_ttl(client, key)
         return self.handle_incrby(self, client, key, -by)
 
 
     def handle_del(self, client, key):
+        self.handle_persist(client, key)
         self.log(client, 'DEL %s' % key)
         if key not in client.table:
             return 0
@@ -255,8 +257,20 @@ class RedisServer(object):
         return 1
 
 
+    def handle_persist(self, client, key):
+        try:
+            del self.expiries["%s %s" % (client.db,key)]
+        except:
+            pass
+
+
     def handle_expire(self, client, key, ttl):
         self.expiries["%s %s" % (client.db,key)] = time.time() + ttl
+        return 1
+
+
+    def handle_expireat(self, client, key, when):
+        self.expiries["%s %s" % (client.db,key)] = when
         return 1
 
 
@@ -283,6 +297,7 @@ class RedisServer(object):
 
 
     def handle_get(self, client, key):
+        self.check_ttl(client, key)
         data = client.table.get(key, None)
         if isinstance(data, deque):
             return BAD_VALUE
@@ -297,6 +312,7 @@ class RedisServer(object):
     def handle_mget(self, client, keys):
         result = []
         for k in keys:
+            self.check_ttl(client, k)
             data = client.table.get(k, None)
             if isinstance(data, deque):
                 return BAD_VALUE
@@ -310,10 +326,12 @@ class RedisServer(object):
 
 
     def handle_incr(self, client, key):
+        self.check_ttl(client, key)
         return self.handle_incrby(client, key, 1)
 
 
     def handle_incrby(self, client, key, by):
+        self.check_ttl(client, key)
         try:
             client.table[key] = int(client.table[key])
             client.table[key] += int(by)
@@ -334,6 +352,7 @@ class RedisServer(object):
 
 
     def handle_llen(self, client, key):
+        self.check_ttl(client, key)
         if key not in client.table:
             return 0
         if not isinstance(client.table[key], deque):
@@ -342,6 +361,7 @@ class RedisServer(object):
 
 
     def handle_lpop(self, client, key):
+        self.check_ttl(client, key)
         if key not in client.table:
             return EMPTY_SCALAR
         if not isinstance(client.table[key], deque):
@@ -355,6 +375,7 @@ class RedisServer(object):
 
 
     def handle_lpush(self, client, key, data):
+        self.check_ttl(client, key)
         if key not in client.table:
             client.table[key] = deque()
         elif not isinstance(client.table[key], deque):
@@ -365,6 +386,7 @@ class RedisServer(object):
 
 
     def handle_lrange(self, client, key, low, high):
+        self.check_ttl(client, key)
         low, high = int(low), int(high)
         if low == 0 and high == -1:
             high = None
@@ -383,6 +405,7 @@ class RedisServer(object):
 
 
     def handle_rpop(self, client, key):
+        self.check_ttl(client, key)
         if key not in client.table:
             return EMPTY_SCALAR
         if not isinstance(client.table[key], deque):
@@ -396,6 +419,7 @@ class RedisServer(object):
 
 
     def handle_rpush(self, client, key, data):
+        self.check_ttl(client, key)
         if key not in client.table:
             client.table[key] = deque()
         elif not isinstance(client.table[key], deque):
@@ -444,6 +468,7 @@ class RedisServer(object):
 
 
     def handle_set(self, client, key, data):
+        self.handle_persist(client, key)
         client.table[key] = data
         self.log(client, 'SET %s -> %s' % (key, data))
         return True
@@ -459,6 +484,7 @@ class RedisServer(object):
 
 
     def handle_getset(self, client, key, data):
+        self.handle_persist(client, key)
         old_data = client.table.get(key, None)
         if isinstance(old_data, deque):
             return BAD_VALUE
@@ -469,6 +495,25 @@ class RedisServer(object):
         client.table[key] = data
         self.log(client, 'GETSET %s %s -> %s' % (key, data, old_data))
         return old_data
+
+
+    def handle_rename(self, client, key, newkey):
+        client.table[newkey] = client.table[key]
+        k = "%s %s" % (client.db,key)
+        # transfer TTL
+        if k in self.expiries:
+            self.expiries["%s %s" % (client.db,key)] = self.expiries[k]
+            del self.expiries[k]
+        del client.table[key]
+        self.log(client, 'RENAME %s -> %s' % (key, newkey))
+        return True
+
+
+    def check_ttl(self, client, key):
+        k = "%s %s" % (client.db,key)
+        if k in self.expiries:
+            if self.expiries[k] <= time.time():
+                self.handle_del(client, key)
 
 
     def handle_publish(self, client, channel, message):
