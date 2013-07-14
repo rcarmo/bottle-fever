@@ -1,6 +1,6 @@
 # bottle-fever
 
-A clean-room clone of the Fever RSS aggregator, focusing on providing a compatible API and a simple feed store based on SQLite
+A clean-room clone of the Fever RSS aggregator, focusing on providing a compatible API and a simple but scalable feed store and fetcher based on SQLite or Postgres (using the [Peewee](http://peewee.readthedocs.org) ORM) 
 
 # Target Features
 
@@ -14,6 +14,10 @@ A clean-room clone of the Fever RSS aggregator, focusing on providing a compatib
 # Stuff I don't intend to do
 
 * A full-featured web interface (feel free to add your own)
+
+# Related Work
+
+* [Coldsweat](https://github.com/passiomatic/coldsweat), by Andrea Peltrin, is a much nicer, polished solution if you're looking for something like this. And yes, there's a nice web interface in there, too.
 
 # Technical underpinnings
 
