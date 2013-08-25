@@ -41,7 +41,7 @@ def grouper(n, iterable):
 if __name__ == "__main__":
     log.info("Starting fetcher.")
     start = time.time()
-    utils.jobs.max_workers = config.settings.fetcher.pool
+    utils.jobs.default_pool.max_workers = config.settings.fetcher.pool
     tasks.workers.control_worker()
     utils.jobs.start()
     log.info("Done in %fs" % (time.time() - start))
