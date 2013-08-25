@@ -7,7 +7,7 @@ Description: In-process job management
 License: MIT (see LICENSE.md for details)
 """
 
-import logging, time
+import os, sys, logging, time
 from cPickle import loads, dumps
 from Queue import PriorityQueue, Empty
 from threading import Thread, Semaphore
@@ -23,15 +23,14 @@ max_workers = 20
 class Pool:
     """Represents a thread pool"""
 
-    def __init__(self, workers = max_workers, rate_limit = 0.25):
+    def __init__(self, workers = max_workers, rate_limit = sys.maxint):
         self.max_workers = workers
-        self.mutex = Semaphore()
-        self.results = {}
-        self.retries = defaultdict(int)
-        self.queue = PriorityQueue()
-        self.threads = []
-        self.rate = rate_limit
-
+        self.mutex       = Semaphore()
+        self.results     = {}
+        self.retries     = defaultdict(int)
+        self.queue       = PriorityQueue()
+        self.threads     = []
+        self.rate_limit  = rate_limit
 
 
     def _loop(self):
@@ -62,7 +61,7 @@ class Pool:
             log.debug("Checking: %d threads" % len(self.threads))
             # clean up finished threads
             self.threads = [t for t in self.threads if t.isAlive()]
-            time.sleep(self.rate)
+            time.sleep(1.0/self.rate_limit)
             # spawn more threads to fill free slots
             log.debug("Running %d threads" % len(self.threads))
             if len(self.threads) < self.max_workers:

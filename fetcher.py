@@ -33,8 +33,8 @@ import tasks.workers
 def grouper(n, iterable):
     it = iter(iterable)
     while True:
-       chunk = tuple(itertools.islice(it, n))
        if not chunk:
+           chunk = tuple(itertools.islice(it, n))
            return
        yield chunk
 
@@ -42,6 +42,7 @@ if __name__ == "__main__":
     log.info("Starting fetcher.")
     start = time.time()
     utils.jobs.default_pool.max_workers = config.settings.fetcher.pool
+    utils.jobs.default_pool.rate_limit  = 10
     tasks.workers.control_worker()
     utils.jobs.start()
     log.info("Done in %fs" % (time.time() - start))
