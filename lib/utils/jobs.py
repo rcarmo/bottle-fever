@@ -35,18 +35,18 @@ class Pool:
     def _loop(self, running):
         """Handle task submissions"""
 
-        def run_task(priority, f, uuid, retry, args, kwargs):
+        def run_task(priority, f, uuid, retries, args, kwargs):
             """Run a single task"""
             try:
                 t.name = getattr(f, '__name__', None)
                 result = f(*args, **kwargs)
             except Exception, e:
                 # Retry the task if applicable
-                if retry > 0:
+                if retries > 0:
                     with self.mutex:
                         self.retries[uuid] += 1
                     # re-queue the task with a lower (i.e., higher-valued) priority
-                    self.queue.put((priority+1, dumps((f, uuid, retry - 1, args, kwargs))))
+                    self.queue.put((priority+1, dumps((f, uuid, retries - 1, args, kwargs))))
                     self.queue.task_done()
                     return
                 result = e
@@ -61,8 +61,8 @@ class Pool:
             # spawn more threads to fill free slots
             if len(self.threads) < self.limit:
                 priority, data = self.queue.get()
-                f, uuid, retry, args, kwargs = loads(data)
-                t = Thread(target=run_task, args=[priority, f, uuid, retry, args, kwargs])
+                f, uuid, retries, args, kwargs = loads(data)
+                t = Thread(target=run_task, args=[priority, f, uuid, retries, args, kwargs])
                 t.setDaemon(True)
                 self.threads.append(t)
                 t.start()
@@ -102,7 +102,7 @@ class Deferred(object):
         return self.pool.retries[self.uuid]
 
 
-def task(func=None, pool=None, retry=0, priority=default_priority):
+def task(func=None, pool=None, max_retries=0, priority=default_priority):
     """Task decorator - setus up a .delay() attribute in the task function"""
 
     if func is None:
@@ -113,7 +113,7 @@ def task(func=None, pool=None, retry=0, priority=default_priority):
 
     def delay(*args, **kwargs):
         uuid = str(uuid4()) # one for each task
-        pool.queue.put((priority,dumps((func, uuid, retry, args, kwargs))))
+        pool.queue.put((priority,dumps((func, uuid, max_retries, args, kwargs))))
         return Deferred(pool, uuid)
     func.delay = delay
     func.pool = pool
