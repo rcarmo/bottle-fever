@@ -17,15 +17,6 @@ from collections import defaultdict
 
 log = logging.getLogger()
 
-def _forever():
-    count = 0
-    while True:
-        if count == 0:
-            count += 1
-            yield count
-        else:
-            yield not default_pool.queue.empty()
-
 default_priority = 0
 max_workers = 20
 
@@ -33,7 +24,7 @@ class Pool:
     """Represents a thread pool"""
 
     def __init__(self, workers = max_workers, rate_limit = 0.25):
-        self.limit = workers
+        self.max_workers = workers
         self.mutex = Semaphore()
         self.results = {}
         self.retries = defaultdict(int)
@@ -42,7 +33,8 @@ class Pool:
         self.rate = rate_limit
 
 
-    def _loop(self, running):
+
+    def _loop(self):
         """Handle task submissions"""
 
         def run_task(priority, f, uuid, retries, args, kwargs):
@@ -66,14 +58,14 @@ class Pool:
                 self.retries[uuid] += 1
             self.queue.task_done()
 
-        while running():
+        while not self.queue.empty():
             log.debug("Checking: %d threads" % len(self.threads))
             # clean up finished threads
             self.threads = [t for t in self.threads if t.isAlive()]
             time.sleep(self.rate)
             # spawn more threads to fill free slots
-            log.debug("Running: %d threads" % len(self.threads))
-            if len(self.threads) < self.limit:
+            log.debug("Running %d threads" % len(self.threads))
+            if len(self.threads) < self.max_workers:
                 log.debug("Queue Length: %d" % self.queue.qsize())
                 try:
                     priority, data = self.queue.get(True, self.rate)
@@ -88,16 +80,24 @@ class Pool:
         log.debug("Exited loop.")
 
 
-    def start(self, daemonize=False, running=_forever):
+    def stop(self):
+        """Flush the job queue"""
+        self.queue = Queue()
+
+
+    def start(self, daemonize=False):
         """Pool entry point"""
 
+        self.results = {}
+        self.retries = defaultdict(int)
+
         if daemonize:
-            t = Thread(target = self._loop, args=[self, running])
+            t = Thread(target = self._loop, args=[self])
             t.setDaemon(True)
             t.start()
             return
         else:
-            self._loop(running)
+            self._loop()
 
 
 default_pool = Pool()
