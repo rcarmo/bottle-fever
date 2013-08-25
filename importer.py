@@ -28,7 +28,7 @@ models.setup()
 if __name__ == "__main__":
     log.info("Starting importer.")
      
-    fc = controllers.FeedController()
+    fc = controllers.FeedController(config.settings)
     uc = controllers.UserController()
     user = uc.get_user('default')
 

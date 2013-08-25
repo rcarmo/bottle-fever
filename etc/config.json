@@ -11,7 +11,7 @@
         "postgres": {
             "name": "feeds"
         },
-        "back_end": "postgres"
+        "back_end": "sqlite3"
     },
     "index": "data/index",
     "server": {

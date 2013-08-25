@@ -7,29 +7,39 @@ Description: In-process job management
 License: MIT (see LICENSE.md for details)
 """
 
+import logging, time
 from cPickle import loads, dumps
-from Queue import PriorityQueue
+from Queue import PriorityQueue, Empty
 from threading import Thread, Semaphore
 from uuid import uuid4
-import logging, time
 from functools import partial
 from collections import defaultdict
 
-def _forever:
-    yield True
+log = logging.getLogger()
+
+def _forever():
+    count = 0
+    while True:
+        if count == 0:
+            count += 1
+            yield count
+        else:
+            yield not default_pool.queue.empty()
 
 default_priority = 0
+max_workers = 20
 
 class Pool:
     """Represents a thread pool"""
 
-    def __init__(self, limit = 20):
-        self.limit = limit
+    def __init__(self, workers = max_workers, rate_limit = 0.25):
+        self.limit = workers
         self.mutex = Semaphore()
         self.results = {}
         self.retries = defaultdict(int)
         self.queue = PriorityQueue()
         self.threads = []
+        self.rate = rate_limit
 
 
     def _loop(self, running):
@@ -45,6 +55,7 @@ class Pool:
                 if retries > 0:
                     with self.mutex:
                         self.retries[uuid] += 1
+                    log.debug("Retrying %s" % uuid)
                     # re-queue the task with a lower (i.e., higher-valued) priority
                     self.queue.put((priority+1, dumps((f, uuid, retries - 1, args, kwargs))))
                     self.queue.task_done()
@@ -56,19 +67,28 @@ class Pool:
             self.queue.task_done()
 
         while running():
+            log.debug("Checking: %d threads" % len(self.threads))
             # clean up finished threads
             self.threads = [t for t in self.threads if t.isAlive()]
+            time.sleep(self.rate)
             # spawn more threads to fill free slots
+            log.debug("Running: %d threads" % len(self.threads))
             if len(self.threads) < self.limit:
-                priority, data = self.queue.get()
+                log.debug("Queue Length: %d" % self.queue.qsize())
+                try:
+                    priority, data = self.queue.get(True, self.rate)
+                except Empty:
+                    break
                 f, uuid, retries, args, kwargs = loads(data)
                 t = Thread(target=run_task, args=[priority, f, uuid, retries, args, kwargs])
                 t.setDaemon(True)
                 self.threads.append(t)
+                log.debug("Starting: %s" % uuid)
                 t.start()
+        log.debug("Exited loop.")
 
 
-    def run(self, daemonize=False, running=_forever):
+    def start(self, daemonize=False, running=_forever):
         """Pool entry point"""
 
         if daemonize:
@@ -118,3 +138,6 @@ def task(func=None, pool=None, max_retries=0, priority=default_priority):
     func.delay = delay
     func.pool = pool
     return func
+
+def start(daemonize = False):
+    default_pool.start(daemonize = daemonize)
