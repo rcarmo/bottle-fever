@@ -15,7 +15,7 @@ from uuid import uuid4
 from functools import partial
 from collections import defaultdict
 
-log = logging.getLogger()
+log = logging.getLogger(__name__)
 
 default_priority = 0
 max_workers = 20
@@ -67,7 +67,7 @@ class Pool:
             if len(self.threads) < self.max_workers:
                 log.debug("Queue Length: %d" % self.queue.qsize())
                 try:
-                    priority, data = self.queue.get(True, self.rate)
+                    priority, data = self.queue.get(True, 1.0/self.rate_limit)
                 except Empty:
                     break
                 f, uuid, retries, args, kwargs = loads(data)

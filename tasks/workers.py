@@ -33,6 +33,7 @@ def control_worker():
         if f.enabled:
             if (not f.last_checked) or (((f.last_checked + f.ttl) > now) and ((f.last_checked + settings.fetcher.min_interval) > now)):
                 fetch_worker.delay(f.id)
+                favicon_worker.delay(f.id)
                 count = count + 1
     log.warn("Queued %d tasks" % count)
     return count
@@ -44,7 +45,8 @@ def fetch_worker(feed_id):
 
     c = Controller(settings)
     changed = c.fetch_feed(feed_id)
-    return changed
+    if changed:
+        parse_worker.delay(feed_id)
     
 
 @task(max_retries=3)
@@ -52,20 +54,24 @@ def parse_worker(feed_id):
     """Parse a feed and queue up items for processing"""
 
     c = Controller(settings)
+    for entry in c.parse_feed(feed_id):
+        item.worker.delay(feed_id, entry)
 
 
 @task(max_retries=3)
-def item_worker(feed_id, item):
+def item_worker(feed_id, entry):
     """Do whatever processing is required on an item prior to database insertion"""
     
     c = Controller(settings)
+    c.parse_item(entry)
 
 
 @task(max_retries=3)
-def favicon_worker(feed_id, uri):
+def favicon_worker(feed_id):
     """Fetch the favicon for a given feed"""
 
     c = Controller(settings)
+    c.update_favicon(feed_id)
 
 
 @task(max_retries=3)

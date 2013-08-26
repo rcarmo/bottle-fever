@@ -88,7 +88,7 @@ class FeedController:
         return f
 
 
-    def after_fetch(self, feed, status = None, error = False):
+    def update_feed(self, feed, status = None, error = False):
         if status:
             feed.last_status = status
         if error:
@@ -121,7 +121,7 @@ class FeedController:
             log.error("Could not fetch %s: %s" % (feed.url, e))
             # TODO: store reason properly
             # Network connect timeout error (Unknown)
-            self.after_fetch(feed, status = 599, error = True)
+            self.update_feed(feed, status = 599, error = True)
             return
             
         feed.last_checked = now
@@ -130,25 +130,27 @@ class FeedController:
         feed.last_status = status
         if status == 304: # not modified
             log.warn("%s - not modified." % netloc)
-            self.after_fetch(feed, status = status)
+            self.update_feed(feed, status = status)
             return False
         elif status == 410: # gone
             log.warn("%s - gone, disabling %s" % (netloc, feed.url))
             feed.enabled = False
-            self.after_fetch(feed, status = status)
+            self.update_feed(feed, status = status)
             return False
         elif status not in [200,301,302,307,308]:
             log.warn("%s - %d, aborting" % (netloc,status))
-            self.after_fetch(feed, status = status, error = True)
+            self.update_feed(feed, status = status, error = True)
             return False
 
             ttl = result.feed.get('ttl',None)
 
-        last_modified = response.get('modified_parsed',None)
-        
+        if 'content-type' in headers and 'xml' not in headers['content-type']:
+            log.warn("%s - content-type %s, proceeding" % (netloc, headers['content-type']))
+
         if status in [301,308]:
             feed.url = response['url']
         feed.etag = response.get('etag',None)
+        last_modified = response.get('modified_parsed',None)
         feed.last_modified = time.mktime(last_modified) if last_modified else None
 
         if not response['data'] or (hashlib.md5(feed.last_content).digest() == hashlib.md5(response['data']).digest()):
@@ -159,34 +161,37 @@ class FeedController:
         return True
 
 
-    def parse_feed(self, feed):
+    def parse_feed(self, feed_id):
+        """Parse a feed and return a set of items"""
+        feed = Feed.get(Feed.id == feed_id)
+
+        if not feed.enabled:
+            raise AttributeError('Feed is disabled')        
 
         if feed.error_count and feed.parsed_with == 1: # there were errors last time around, so let's try feedparser this time
             try:
-                result = feedparser.parse(response['data'])
+                result = feedparser.parse(feed.last_content)
                 feed.parsed_with = 2
             except Exception, e:
                 log.error("Could not parse %s with feedparser: %s" % (feed.url, e))
                 # Invalid response from upstream server
-                self.after_fetch(feed, status = 502, error = True)
+                self.update_feed(feed, status = 502, error = True)
                 return
         else:
             try:
-                result = speedparser.parse(response['data'])
+                result = speedparser.parse(feed.last_content)
                 feed.parsed_with = 1
             except Exception, e:
                 log.error("Could not parse %s with speedparser: %s" % (feed.url, e))
                 try:
-                    result = feedparser.parse(response['data'])
+                    result = feedparser.parse(feed.last_content)
                     feed.parsed_with = 2
                 except Exception, e:
                     log.error("Could not parse %s with feedparser: %s" % (feed.url, e))
                     # Invalid response from upstream server
-                    self.after_fetch(feed, status = 502, error = True)
+                    self.update_feed(feed, status = 502, error = True)
                     return
         
-        status    = response.get('status', 503)
-        headers   = response.get('headers', {})
         exception = result.get("bozo_exception", Exception()).__class__
 
         if exception != Exception:
@@ -204,35 +209,15 @@ class FeedController:
             if message:
                 log.warn("%s: %s" % (netloc, message))
             if leave: 
-                self.after_fetch(feed, status = status, error = True)
+                self.update_feed(feed, status = status, error = True)
                 return
-        
-        
-        if 'content-type' in headers and 'xml' not in headers['content-type']:
-            log.warn("%s - content-type %s, proceeding" % (netloc, headers['content-type']))
-        
-        ttl = result.feed.get('ttl',None)
-        etag = response.get('etag',None)
-        last_modified = response.get('modified_parsed',None)
-        last_modified = result.feed.get('modified_parsed',None)
-        
-        if status in [301,308]:
-            feed.url = response['url']
-        feed.ttl = ttl
-        feed.etag = etag
-        feed.last_modified = time.mktime(last_modified) if last_modified else None
-        self.after_fetch(feed, status = status)
-        feed.last_status = status
-        
+                
         if not len(result.entries):
             return
 
         result.entries.reverse()
         log.debug("%s - %d entries parsed" % (netloc,len(result.entries)))
         
-        entries = []
-        
-        now = time.time()
         for entry in result.entries:
             when = get_entry_timestamp(entry)
             # skip ancient feed items
@@ -251,87 +236,73 @@ class FeedController:
                 log.error(tb())
 
             html = get_entry_content(entry)
-            # stack these for commiting to the database below
-            entries.append({'guid'   : guid,
-                            'feed'   : feed,
-                            'title'  : get_entry_title(entry),
-                            'author' : get_entry_author(entry,result.feed),
-                            'html'   : html,
-                            'url'    : entry.link,
-                            'tags'   : get_entry_tags(entry),
-                            'when'   : when})
-        
-        if not len(entries):
-            return
+            yield  {'guid'   : guid,
+                    'feed'   : feed,
+                    'title'  : get_entry_title(entry),
+                    'author' : get_entry_author(entry,result.feed),
+                    'html'   : html,
+                    'url'    : entry.link,
+                    'tags'   : get_entry_tags(entry),
+                    'when'   : when}
+    
 
-        log.debug("%s - %d entries in %fs" % (netloc, len(entries),time.time()-now))
+    def parse_item(self, entry):   
         now = time.time()
-        
-        
         records = 0
         now = time.time()
         ix = open_dir(self.settings.index)
         writer = AsyncWriter(ix)
 
-        for entry in entries:
+        try:
+            item = Item.get(guid = entry['guid'])
+        except Item.DoesNotExist:
+            item = Item.create(**entry)
+        records += 1
+
+        if len(entry['html']):
+            soup = BeautifulSoup(entry['html'], self.settings.fetcher.parser)
+            plaintext = ''.join(soup.find_all(text=True))
+            writer.add_document(
+                id = item.id,
+                guid = unicode(item.guid),
+                title = entry['title'],
+                text = plaintext,
+                when = datetime.datetime.utcfromtimestamp(item.when)
+            )
+
+            hrefs = get_link_references(soup)
+        else:
+            hrefs = []
+        hrefs.append(entry['url'])
+        
+        if not self.settings.fetcher.post_processing.expand_links:
+            return
+
+        lnow = time.time()
+        links = expand_links(set(hrefs))
+        log.debug("%s - %d links in %fs" % (netloc, len(hrefs),time.time()-lnow))
+        # TODO: replace hrefs in content, avoiding creating the item twice
+        # including item url = hrefs[entry.link]
+        # ...and handling updates
+        #links = list(set(links.values()))
+        links = set(links.values())
+        
+        for link in links:
             try:
-                item = Item.get(guid = entry['guid'])
-            except Item.DoesNotExist:
-                item = Item.create(**entry)
-            records += 1
-
-            if len(entry['html']):
-                soup = BeautifulSoup(entry['html'], self.settings.fetcher.parser)
-                plaintext = ''.join(soup.find_all(text=True))
-                writer.add_document(
-                    id = item.id,
-                    guid = unicode(item.guid),
-                    title = entry['title'],
-                    text = plaintext,
-                    when = datetime.datetime.utcfromtimestamp(item.when)
-                )
-
-                hrefs = get_link_references(soup)
-            else:
-                hrefs = []
-            hrefs.append(entry['url'])
-            
-            if not self.settings.fetcher.post_processing.expand_links:
-                return
-
-            lnow = time.time()
-            links = expand_links(set(hrefs))
-            log.debug("%s - %d links in %fs" % (netloc, len(hrefs),time.time()-lnow))
-            # TODO: replace hrefs in content, avoiding creating the item twice
-            # including item url = hrefs[entry.link]
-            # ...and handling updates
-            #links = list(set(links.values()))
-            links = set(links.values())
-            
-            for link in links:
-                try:
-                    reference = Reference.get(item = item, link = Link.get(expanded_url = link))
-                except Reference.DoesNotExist:
-                    reference = Reference.create(item = item, link = Link.get(expanded_url = link))
-                    records += 1
-                except:
-                    log.error(tb())
-
-        log.debug("%s - %d records in %fs" % (netloc, records,time.time()-now))
+                reference = Reference.get(item = item, link = Link.get(expanded_url = link))
+            except Reference.DoesNotExist:
+                reference = Reference.create(item = item, link = Link.get(expanded_url = link))
+                records += 1
+            except:
+                log.error(tb())
         writer.commit()
 
+
+    def update_favicon(self, feed_id):
+        feed = Feed.get(Feed.id == feed_id)
         try:
             favicon = Favicon.get(id = feed.favicon)
         except Favicon.DoesNotExist:
             favicon = Favicon.create(data=fetch_anyway(feed.site_url))
             feed.favicon = favicon
             feed.save()
-
-
-        # TODO: download linked content, extract keywords, the works.
-        
-
-def feed_worker(feed):
-    # Use a private controller for multiprocessing
-    fc = FeedController()
-    fc.fetch_feed(feed)
