@@ -31,10 +31,10 @@ def control_worker():
     count = 0
     for f in c.get_feeds():
         if f.enabled:
-            if (not f.last_checked) or (((f.last_checked + f.ttl) > now) and ((f.last_checked + settings.fetcher.min_interval) > now)):
+            if (not f.last_checked) or (f.ttl and ((f.last_checked + f.ttl) > now) and ((f.last_checked + settings.fetcher.min_interval) > now)):
                 fetch_worker.delay(f.id)
-                favicon_worker.delay(f.id)
-                count = count + 1
+                #favicon_worker.delay(f.id)
+                count += 1
     log.warn("Queued %d tasks" % count)
     return count
 
@@ -55,7 +55,7 @@ def parse_worker(feed_id):
 
     c = Controller(settings)
     for entry in c.parse_feed(feed_id):
-        item.worker.delay(feed_id, entry)
+        item_worker.delay(feed_id, entry)
 
 
 @task(max_retries=3)

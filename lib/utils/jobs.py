@@ -7,7 +7,7 @@ Description: In-process job management
 License: MIT (see LICENSE.md for details)
 """
 
-import os, sys, logging, time
+import os, sys, logging, time, traceback
 from cPickle import loads, dumps
 from Queue import PriorityQueue, Empty
 from threading import Thread, Semaphore
@@ -41,12 +41,12 @@ class Pool:
             try:
                 t.name = getattr(f, '__name__', None)
                 result = f(*args, **kwargs)
-            except Exception, e:
+            except Exception as e:
                 # Retry the task if applicable
+                log.error(traceback.format_exc())
                 if retries > 0:
                     with self.mutex:
                         self.retries[uuid] += 1
-                    log.debug("Retrying %s" % uuid)
                     # re-queue the task with a lower (i.e., higher-valued) priority
                     self.queue.put((priority+1, dumps((f, uuid, retries - 1, args, kwargs))))
                     self.queue.task_done()
@@ -74,14 +74,13 @@ class Pool:
                 t = Thread(target=run_task, args=[priority, f, uuid, retries, args, kwargs])
                 t.setDaemon(True)
                 self.threads.append(t)
-                log.debug("Starting: %s" % uuid)
                 t.start()
         log.debug("Exited loop.")
 
 
     def stop(self):
         """Flush the job queue"""
-        self.queue = Queue()
+        self.queue = PriorityQueue()
 
 
     def start(self, daemonize=False):
@@ -125,7 +124,7 @@ def task(func=None, pool=None, max_retries=0, priority=default_priority):
     """Task decorator - setus up a .delay() attribute in the task function"""
 
     if func is None:
-        return partial(task, pool=pool)
+        return partial(task, pool=pool, max_retries=max_retries)
 
     if pool is None:
         pool = default_pool

@@ -72,7 +72,7 @@
         "version": 1,
         "formatters": {
             "http": {
-                "format" : "localhost - - [%(asctime)s] %(process)d %(levelname)s %(message)s",
+                "format" : "localhost - - [%(asctime)s] %(thread)x %(levelname)s %(message)s",
                 "datefmt": "%Y/%m/%d %H:%M:%S"
             }
         },
@@ -96,8 +96,9 @@
                 "handlers": ["console"]
             },
             "utils.jobs": {
-                "level"   : "WARN",
-                "handlers": ["console"]
+                "level"    : "WARN",
+                "handlers" : ["console"],
+                "propagate": false
             }
         },
         "root": {

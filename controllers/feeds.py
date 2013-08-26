@@ -92,7 +92,7 @@ class FeedController:
         if status:
             feed.last_status = status
         if error:
-            feed.error_count = feed.error_count + 1
+            feed.error_count += 1
         if feed.error_count > self.settings.fetcher.error_threshold:
             feed.enabled = False
             log.warn("%s - disabling %s" % (netloc, feed.url))
@@ -122,12 +122,11 @@ class FeedController:
             # TODO: store reason properly
             # Network connect timeout error (Unknown)
             self.update_feed(feed, status = 599, error = True)
-            return
+            raise
             
         feed.last_checked = now
         status = response['status']
 
-        feed.last_status = status
         if status == 304: # not modified
             log.warn("%s - not modified." % netloc)
             self.update_feed(feed, status = status)
@@ -142,18 +141,22 @@ class FeedController:
             self.update_feed(feed, status = status, error = True)
             return False
 
-            ttl = result.feed.get('ttl',None)
-
-        if 'content-type' in headers and 'xml' not in headers['content-type']:
-            log.warn("%s - content-type %s, proceeding" % (netloc, headers['content-type']))
+        if 'content-type' in response.keys() and 'xml' not in response['content-type']:
+            log.warn("%s - content-type %s, proceeding" % (netloc, response['content-type']))
 
         if status in [301,308]:
             feed.url = response['url']
+
+        feed.last_status = status
+        feed.ttl = 0
         feed.etag = response.get('etag',None)
         last_modified = response.get('modified_parsed',None)
         feed.last_modified = time.mktime(last_modified) if last_modified else None
 
-        if not response['data'] or (hashlib.md5(feed.last_content).digest() == hashlib.md5(response['data']).digest()):
+        if not response['data']:
+            return False
+
+        if feed.last_content and (hashlib.md5(feed.last_content).digest() == hashlib.md5(response['data']).digest()):
             return False
 
         feed.last_content = response['data']
@@ -212,12 +215,15 @@ class FeedController:
                 self.update_feed(feed, status = status, error = True)
                 return
                 
+        feed.ttl = result.feed.get('ttl',None)
+        feed.save()
         if not len(result.entries):
             return
 
         result.entries.reverse()
-        log.debug("%s - %d entries parsed" % (netloc,len(result.entries)))
+        log.debug("%s - %d entries parsed" % (feed.url,len(result.entries)))
         
+        now = time.time()
         for entry in result.entries:
             when = get_entry_timestamp(entry)
             # skip ancient feed items
@@ -247,9 +253,7 @@ class FeedController:
     
 
     def parse_item(self, entry):   
-        now = time.time()
         records = 0
-        now = time.time()
         ix = open_dir(self.settings.index)
         writer = AsyncWriter(ix)
 
@@ -278,9 +282,7 @@ class FeedController:
         if not self.settings.fetcher.post_processing.expand_links:
             return
 
-        lnow = time.time()
         links = expand_links(set(hrefs))
-        log.debug("%s - %d links in %fs" % (netloc, len(hrefs),time.time()-lnow))
         # TODO: replace hrefs in content, avoiding creating the item twice
         # including item url = hrefs[entry.link]
         # ...and handling updates

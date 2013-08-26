@@ -7,6 +7,7 @@ Created by: Rui Carmo
 License: MIT (see LICENSE for details)
 """
 
+import time
 
 def get_entry_content(entry):
     """Select the best content from an entry"""
