@@ -7,7 +7,13 @@ Created by: Rui Carmo
 License: MIT (see LICENSE for details)
 """
 
-import time
+import os, sys, time, re, urlparse, logging, hashlib
+from models import Link
+from utils import tb
+from utils.urlkit import expand
+from config import settings
+
+log = logging.getLogger()
 
 def get_entry_content(entry):
     """Select the best content from an entry"""

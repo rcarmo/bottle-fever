@@ -210,7 +210,7 @@ class FeedController:
                 AttributeError                       : (result.bozo_exception, True)
             }.get(exception,(msg,False))
             if message:
-                log.warn("%s: %s" % (netloc, message))
+                log.warn("%s: %s" % (feed.url, message))
             if leave: 
                 self.update_feed(feed, status = status, error = True)
                 return
@@ -243,7 +243,7 @@ class FeedController:
 
             html = get_entry_content(entry)
             yield  {'guid'   : guid,
-                    'feed'   : feed,
+                    'feed'   : feed.id,
                     'title'  : get_entry_title(entry),
                     'author' : get_entry_author(entry,result.feed),
                     'html'   : html,
