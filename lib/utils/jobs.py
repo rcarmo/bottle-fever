@@ -32,6 +32,12 @@ class Pool:
         self.threads     = []
         self.rate_limit  = rate_limit
 
+    def _tick(self):
+        time.sleep(1.0/self.rate_limit)
+        # clean up finished threads
+        self.threads = [t for t in self.threads if t.isAlive()]
+        return (not self.queue.empty()) or (len(self.threads) > 0)
+
 
     def _loop(self):
         """Handle task submissions"""
@@ -43,7 +49,8 @@ class Pool:
                 result = f(*args, **kwargs)
             except Exception as e:
                 # Retry the task if applicable
-                log.error(traceback.format_exc())
+                if log:
+                    log.error(traceback.format_exc())
                 if retries > 0:
                     with self.mutex:
                         self.retries[uuid] += 1
@@ -57,11 +64,7 @@ class Pool:
                 self.retries[uuid] += 1
             self.queue.task_done()
 
-        while not self.queue.empty():
-            log.debug("Checking: %d threads" % len(self.threads))
-            # clean up finished threads
-            self.threads = [t for t in self.threads if t.isAlive()]
-            time.sleep(1.0/self.rate_limit)
+        while self._tick():
             # spawn more threads to fill free slots
             log.debug("Running %d threads" % len(self.threads))
             if len(self.threads) < self.max_workers:
@@ -76,6 +79,8 @@ class Pool:
                 self.threads.append(t)
                 t.start()
         log.debug("Exited loop.")
+        for t in self.threads:
+            t.join()
 
 
     def stop(self):
