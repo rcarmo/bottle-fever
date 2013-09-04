@@ -33,16 +33,18 @@
         "max_history": 604800,
         "post_processing": {
             "#": "expand URLs in content and strip typical tracking junk",
-            "expand_links": true
+            "expand_links": false
         },
         "#": "number of errors before we invalidate a feed", 
         "error_threshold": 100,
         "#": "HTML parser: html.parser, lxml or html5lib",
         "parser": "lxml",
         "#": "chunk size for processing queue",
-        "chunk_size": 32,
+        "chunk_size": 8,
         "#": "number of threads",
-        "pool": 8
+        "pool": 64,
+        "#": "Tasks/second",
+        "rate_limit": 200
     },
     "expander": {
         "#": "don't expand links to the following domains - these are wildcards, not pure regexps",

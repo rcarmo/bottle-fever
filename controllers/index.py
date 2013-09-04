@@ -16,19 +16,18 @@ log = logging.getLogger()
 from models import Item
 from bs4 import BeautifulSoup
 from whoosh.index import open_dir
-from whoosh.writing import BufferedWriter
+from whoosh.writing import AsyncWriter
 
 class IndexController:
 
     def __init__(self, settings):
-        feedparser.USER_AGENT = settings.fetcher.user_agent
         self.settings = settings
         self.index = open_dir(settings.index)
-        self.writer = BufferedWriter(self.index, period=10, limit=20)
+        self.writer = AsyncWriter(self.index)
 
 
     def __del__(self):
-        self.writer.close()
+        pass
 
 
     def add_item(self, guid):
@@ -41,13 +40,12 @@ class IndexController:
         if len(item.html):
             soup = BeautifulSoup(item.html, self.settings.fetcher.parser)
             plaintext = ''.join(soup.find_all(text=True))
-            writer.add_document(
+            self.writer.add_document(
                 id    = item.id,
                 guid  = unicode(item.guid),
                 title = item.title,
                 text  = plaintext,
                 when  = datetime.datetime.utcfromtimestamp(item.when)
             )
-            writer.close()
             return True
         return False
