@@ -225,14 +225,19 @@ class FeedController:
         if not len(result.entries):
             return
 
+        if not feed.last_modified:
+            feed.last_modified = get_entry_timestamp(result.entries[0])
+            feed.save()
+
         result.entries.reverse()
+
         log.debug("%s - %d entries parsed" % (feed.url,len(result.entries)))
-        
+
         now = time.time()
         for entry in result.entries:
             when = get_entry_timestamp(entry)
             # skip ancient feed items
-            if (now - when) < self.settings.fetcher.max_history:
+            if (now - when) > self.settings.fetcher.max_history:
                 continue
 
             guid = get_entry_id(entry)
@@ -293,7 +298,7 @@ class FeedController:
             except:
                 log.error(tb())
         return guid
-        
+
 
     def update_favicon(self, feed_id):
         feed = Feed.get(Feed.id == feed_id)

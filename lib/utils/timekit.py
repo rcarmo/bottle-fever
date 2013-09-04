@@ -151,14 +151,14 @@ def time_since(older=None, newer=None, detail=2):
 
     interval = newer - older
     if interval < 0:
-        return _('some_time')
+        return _('some time')
 
     # We should ideally do this:
     # raise ValueError('Time interval cannot be negative')
     # but it makes sense to fail gracefully here
 
     if interval < 60:
-        return _('less_1min')
+        return _('less than a minute')
 
     output = ''
     for steps in range(detail):

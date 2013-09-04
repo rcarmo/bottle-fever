@@ -20,17 +20,12 @@
             "port": 8000
         }
     },
-    "celery": {
-        "broker_url"    : "redis://localhost:6379/0",
-        "result_backend": "redis://localhost:6379/0",
-        "rate_limit"    : "10/s"
-    },
     "fetcher": {
         "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_3) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1309.0 Safari/537.17",
         "fetch_timeout": 30,
         "link_timeout": 5,
         "min_interval": 900,
-        "max_history": 604800,
+        "max_history": 31536000,
         "post_processing": {
             "#": "expand URLs in content and strip typical tracking junk",
             "expand_links": false
