@@ -22,7 +22,7 @@ from utils import Struct, tb
 from bs4 import BeautifulSoup
 import markup.feedparser as feedparser
 from whoosh.index import open_dir
-from whoosh.writing import AsyncWriter
+from whoosh.writing import BufferedWriter
 try:
     import markup.speedparser.speedparser as speedparser
 except ImportError, e: # speedparser or its dependencies are not available
@@ -37,6 +37,7 @@ class FeedController:
     def __init__(self, settings):
         feedparser.USER_AGENT = settings.fetcher.user_agent
         self.settings = settings
+        self.index = open_dir(settings.index)
         db.connect()
 
 
@@ -115,7 +116,11 @@ class FeedController:
             modified = None
         
         try:
-            response = fetch(feed.url, etag = feed.etag, last_modified = modified, timeout=self.settings.fetcher.fetch_timeout)
+            response = fetch(feed.url, 
+                etag          = feed.etag, 
+                last_modified = modified, 
+                timeout       = self.settings.fetcher.fetch_timeout,
+                user_agent    = settings.fetcher.user_agent)
             log.debug("%s - %d, %d" % (feed.url, response['status'], len(response['data'])))
         except Exception, e:
             log.error("Could not fetch %s: %s" % (feed.url, e))
@@ -212,7 +217,7 @@ class FeedController:
             if message:
                 log.warn("%s: %s" % (feed.url, message))
             if leave: 
-                self.update_feed(feed, status = status, error = True)
+                self.update_feed(feed, status = 502, error = True)
                 return
                 
         feed.ttl = result.feed.get('ttl',None)
@@ -254,33 +259,23 @@ class FeedController:
 
     def parse_item(self, entry):   
         records = 0
-        ix = open_dir(self.settings.index)
-        writer = AsyncWriter(ix)
 
+        guid = entry['guid']
         try:
-            item = Item.get(guid = entry['guid'])
+            item = Item.get(guid = guid)
         except Item.DoesNotExist:
             item = Item.create(**entry)
         records += 1
 
         if len(entry['html']):
             soup = BeautifulSoup(entry['html'], self.settings.fetcher.parser)
-            plaintext = ''.join(soup.find_all(text=True))
-            writer.add_document(
-                id = item.id,
-                guid = unicode(item.guid),
-                title = entry['title'],
-                text = plaintext,
-                when = datetime.datetime.utcfromtimestamp(item.when)
-            )
-
             hrefs = get_link_references(soup)
         else:
             hrefs = []
         hrefs.append(entry['url'])
         
         if not self.settings.fetcher.post_processing.expand_links:
-            return
+            return guid
 
         links = expand_links(set(hrefs))
         # TODO: replace hrefs in content, avoiding creating the item twice
@@ -297,8 +292,8 @@ class FeedController:
                 records += 1
             except:
                 log.error(tb())
-        writer.commit()
-
+        return guid
+        
 
     def update_favicon(self, feed_id):
         feed = Feed.get(Feed.id == feed_id)

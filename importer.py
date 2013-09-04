@@ -24,6 +24,7 @@ log = logging.getLogger()
 # load modules
 import models, controllers
 models.setup()
+models.setup_index()
 
 if __name__ == "__main__":
     log.info("Starting importer.")

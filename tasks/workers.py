@@ -67,6 +67,14 @@ def item_worker(feed_id, entry):
 
 
 @task(max_retries=3)
+def index_worker(guids):
+    
+    c = Controller(settings)
+    for guid in guids:
+        c.index_item(guid)
+
+
+@task(max_retries=3)
 def favicon_worker(feed_id):
     """Fetch the favicon for a given feed"""
 
