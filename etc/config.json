@@ -20,29 +20,26 @@
             "port": 8000
         }
     },
-    "celery": {
-        "broker_url"    : "redis://localhost:6379/0",
-        "result_backend": "redis://localhost:6379/0",
-        "rate_limit"    : "10/s"
-    },
     "fetcher": {
         "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_3) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1309.0 Safari/537.17",
         "fetch_timeout": 30,
         "link_timeout": 5,
         "min_interval": 900,
-        "max_history": 604800,
+        "max_history": 31536000,
         "post_processing": {
             "#": "expand URLs in content and strip typical tracking junk",
-            "expand_links": true
+            "expand_links": false
         },
         "#": "number of errors before we invalidate a feed", 
         "error_threshold": 100,
         "#": "HTML parser: html.parser, lxml or html5lib",
         "parser": "lxml",
         "#": "chunk size for processing queue",
-        "chunk_size": 32,
+        "chunk_size": 8,
         "#": "number of threads",
-        "pool": 8
+        "pool": 64,
+        "#": "Tasks/second",
+        "rate_limit": 200
     },
     "expander": {
         "#": "don't expand links to the following domains - these are wildcards, not pure regexps",

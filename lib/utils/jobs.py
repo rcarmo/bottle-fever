@@ -142,5 +142,6 @@ def task(func=None, pool=None, max_retries=0, priority=default_priority):
     func.pool = pool
     return func
 
+
 def start(daemonize = False):
     default_pool.start(daemonize = daemonize)

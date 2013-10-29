@@ -8,7 +8,8 @@ Created by: Rui Carmo
 
 from __future__ import absolute_import
 
-import os, sys, re, logging, time, subprocess, json
+import os, sys, re, logging, time, subprocess, json, itertools
+from Queue import Queue, Empty
 
 sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),'../lib'))
 
@@ -16,9 +17,20 @@ from config import settings
 from utils.jobs import task
 from utils.urlkit import fetch
 from utils import Struct
-from controllers import FeedController as Controller
+from controllers import IndexController, FeedController as Controller
 
 log = logging.getLogger()
+
+items = []
+
+
+def chunks(n, iterable):
+    it = iter(iterable)
+    while True:
+        chunk = tuple(itertools.islice(it, n))
+        if not chunk:
+            return
+        yield chunk
 
 
 @task
@@ -27,7 +39,7 @@ def control_worker():
     
     c = Controller(settings)
 
-    now = time.time()
+    now   = time.time()
     count = 0
     for f in c.get_feeds():
         if f.enabled:
@@ -36,6 +48,7 @@ def control_worker():
                 #favicon_worker.delay(f.id)
                 count += 1
     log.warn("Queued %d tasks" % count)
+    index_worker.delay()
     return count
 
 
@@ -54,16 +67,34 @@ def parse_worker(feed_id):
     """Parse a feed and queue up items for processing"""
 
     c = Controller(settings)
-    for entry in c.parse_feed(feed_id):
-        item_worker.delay(feed_id, entry)
+    for chunk in chunks(settings.fetcher.chunk_size, c.parse_feed(feed_id)):
+        item_worker.delay(feed_id, chunk)
 
 
 @task(max_retries=3)
-def item_worker(feed_id, entry):
+def item_worker(feed_id, chunk):
     """Do whatever processing is required on an item prior to database insertion"""
     
+    global items
     c = Controller(settings)
-    c.parse_item(entry)
+    for entry in chunk:
+        guid = c.parse_item(entry)
+        items.append(guid)
+
+
+@task
+def index_worker():
+    global items
+    for chunk in chunks(settings.fetcher.chunk_size, items):
+        chunk_worker.delay(chunk)
+
+
+@task(max_retries=3)
+def chunk_worker(chunk):
+    c = IndexController(settings)
+
+    for guid in chunk:
+        c.add_item(guid)
 
 
 @task(max_retries=3)

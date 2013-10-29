@@ -10,4 +10,4 @@ License: MIT (see LICENSE.md for details)
 import os, sys, logging, inspect
 
 from db import *
-from index import item_schema, setup_index
+from index import item_schema, setup as setup_index

@@ -26,24 +26,19 @@ import models, controllers
 models.setup()
 models.setup_index()
 
-
 import utils.jobs
 import tasks.workers
 
-def grouper(n, iterable):
-    it = iter(iterable)
-    while True:
-       if not chunk:
-           chunk = tuple(itertools.islice(it, n))
-           return
-       yield chunk
 
 if __name__ == "__main__":
     log.info("Starting fetcher.")
     start = time.time()
     utils.jobs.default_pool.max_workers = config.settings.fetcher.pool
-    utils.jobs.default_pool.rate_limit  = 10
+    utils.jobs.default_pool.rate_limit  = config.settings.fetcher.rate_limit
     tasks.workers.control_worker()
+    utils.jobs.start()
+    log.info("Retrieval in %fs" % (time.time() - start))
+    tasks.workers.index_worker()
     utils.jobs.start()
     log.info("Done in %fs" % (time.time() - start))
 

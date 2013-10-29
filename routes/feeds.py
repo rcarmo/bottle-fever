@@ -14,8 +14,9 @@ log = logging.getLogger()
 
 from controllers.feeds import FeedController
 from utils import tb
+from config import settings
 
-fc = FeedController()
+fc = FeedController(settings)
 
 
 @route('/feed/<id:int>')
@@ -38,7 +39,6 @@ def index():
     """Render a feed index"""
     try:
         feeds = fc.get_feeds_with_counts()
-        log.debug(feeds[0])
     except:
         log.error(tb())
         abort(500,"Error accessing feed data")
@@ -52,5 +52,5 @@ def index():
         {'label': 'Status',     'field': 'last_status'},
         {'label': 'Items',      'field': 'item_count'},
     ]
-    return {'headers': headers, 'feeds': feeds[1:10], 'title': 'feeds'}
+    return {'headers': headers, 'feeds': feeds, 'title': 'feeds'}
 
