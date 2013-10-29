@@ -7,7 +7,7 @@ Description: In-process job management
 License: MIT (see LICENSE.md for details)
 """
 
-import os, sys, logging, time, traceback
+import os, sys, logging, time, traceback, multiprocessing, gc
 from cPickle import loads, dumps
 from Queue import PriorityQueue, Empty
 from threading import Thread, Semaphore
@@ -18,12 +18,12 @@ from collections import defaultdict
 log = logging.getLogger(__name__)
 
 default_priority = 0
-max_workers = 20
+max_workers = multiprocessing.cpu_count() * 2
 
 class Pool:
     """Represents a thread pool"""
 
-    def __init__(self, workers = max_workers, rate_limit = sys.maxint):
+    def __init__(self, workers = max_workers, rate_limit = 1000):
         self.max_workers = workers
         self.mutex       = Semaphore()
         self.results     = {}
@@ -66,13 +66,13 @@ class Pool:
 
         while self._tick():
             # spawn more threads to fill free slots
-            log.debug("Running %d threads" % len(self.threads))
+            log.warn("Running %d/%d threads" % (len(self.threads),self.max_workers))
             if len(self.threads) < self.max_workers:
                 log.debug("Queue Length: %d" % self.queue.qsize())
                 try:
                     priority, data = self.queue.get(True, 1.0/self.rate_limit)
                 except Empty:
-                    break
+                    continue
                 f, uuid, retries, args, kwargs = loads(data)
                 t = Thread(target=run_task, args=[priority, f, uuid, retries, args, kwargs])
                 t.setDaemon(True)
