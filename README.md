@@ -2,6 +2,12 @@
 
 A clean-room clone of the Fever RSS aggregator, focusing on providing a compatible API and a simple but scalable feed store and fetcher based on SQLite or Postgres (using the [Peewee](http://peewee.readthedocs.org) ORM) 
 
+## Project Status (May 2014)
+
+This is ON HOLD -- i.e., usable and reasonably updated, but I have decided I'd rather read my RSS feeds as mail and moved on to use [rss2imap][r2i], which was a more cost-effective hack. 
+
+I am preparing to incorporate portions of this into [rss2imap-gae][r2ig], which is a completely different thing in more ways than one, so look there for news.
+
 # Target Features
 
 * Multi-user support
@@ -28,7 +34,8 @@ A clean-room clone of the Fever RSS aggregator, focusing on providing a compatib
 * Pick your own HTML parser (`lxml`, `html5lib`, `html.parser`)
 * A nice bowl of [BeautifulSoup][bs]
 
-
+[r2i]: https://github.com/rcarmo/rss2imap
+[r2ig]: https://github.com/rcarmo/rss2imap-gae
 [p]: https://github.com/coleifer/peewee
 [b]: http://bottlepy.org
 [sp]: https://github.com/hiidef/speedparser
