@@ -8,7 +8,9 @@ This is ON HOLD -- i.e., usable and reasonably updated, but I have decided I'd r
 
 I am preparing to incorporate portions of this into [rss2imap-gae][r2ig], which is a completely different thing in more ways than one, so look there for news.
 
-# Target Features
+Nevertheless, this codebase has served me well in terms of exploring ways to parallelize feed fetching -- I suggest you explore the available branches to get a feel for the different strategies I employed.
+
+## Target Features
 
 * Multi-user support
 * Compatible with Reeder apps on iOS and Mac OS X
@@ -17,15 +19,15 @@ I am preparing to incorporate portions of this into [rss2imap-gae][r2ig], which 
 * Junk filtering (automatic elimination of redundant news items)
 * Page extraction from link-only feeds
 
-# Stuff I don't intend to do
+## Stuff I don't intend to do
 
 * A full-featured web interface (feel free to add your own)
 
-# Related Work
+## Related Work
 
 * [Coldsweat](https://github.com/passiomatic/coldsweat), by Andrea Peltrin, is a much nicer, polished solution if you're looking for something like this. And yes, there's a nice web interface in there, too.
 
-# Technical underpinnings
+## Technical underpinnings
 
 * SQLite database (trivial to replace if you want to scale up, since I use the [Peewee][p] ORM)
 * [Bottle][b] web framework
